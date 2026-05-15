@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "336082622097",
+    "project_id": "rice-mill-9496d",
+    "storage_bucket": "rice-mill-9496d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336082622097:android:129949dd1c929809059130",
+        "android_client_info": {
+          "package_name": "com.rice_mill.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "336082622097-fjva55k25i2i9g28h29948v6sfpe4b2l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rice_mill.app",
+            "certificate_hash": "fea700d34c6aa24ac32a59605481ce15f1339ad4"
+          }
+        },
+        {
+          "client_id": "336082622097-jceplsto4bl13s3ecgeij244nvu66pml.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSHoYuIfbAia1SdVmV2t3giOQ9L2srv8g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "336082622097-jceplsto4bl13s3ecgeij244nvu66pml.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

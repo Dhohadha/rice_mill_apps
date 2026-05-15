@@ -10,14 +10,19 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 
 // Connectivity Provider
-final connectivityProvider = StreamProvider<ConnectivityResult>((ref) {
-  return Connectivity().onConnectivityChanged.map((results) => results.first);
+final connectivityProvider = StreamProvider<ConnectivityResult>((ref) async* {
+  final initial = await Connectivity().checkConnectivity();
+  if (initial.isNotEmpty) yield initial.first;
+  yield* Connectivity().onConnectivityChanged.map((results) => results.first);
 });
 
 // Server Status Provider
-final serverStatusProvider = StreamProvider<bool>((ref) {
+final serverStatusProvider = StreamProvider<bool>((ref) async* {
   final api = ref.watch(apiServiceProvider);
-  return Stream.periodic(const Duration(seconds: 10)).asyncMap((_) async {
+  // Check immediately
+  yield await api.checkHealth();
+  // Then check every 10 seconds
+  yield* Stream.periodic(const Duration(seconds: 10)).asyncMap((_) async {
     return await api.checkHealth();
   });
 });

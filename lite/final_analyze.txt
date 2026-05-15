@@ -1,0 +1,6 @@
+﻿Analyzing rice_mill_...                                         
+
+   info - Unnecessary use of multiple underscores - lib\screens\home_screen.dart:123:90 - unnecessary_underscores
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:23:7 - avoid_print
+   info - The package name 'rice_mill_' isn't a lower_case_with_underscores identifier - pubspec.yaml:1:7 - package_names
+

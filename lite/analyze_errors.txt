@@ -1,0 +1,14 @@
+﻿Analyzing rice_mill_...                                         
+
+   info - Unnecessary use of multiple underscores - lib\screens\home_screen.dart:123:90 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:248:31 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:260:59 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:23:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:29:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:35:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:48:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\mqtt_service.dart:52:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\providers.dart:30:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\providers.dart:39:7 - avoid_print
+   info - The package name 'rice_mill_' isn't a lower_case_with_underscores identifier - pubspec.yaml:1:7 - package_names
+

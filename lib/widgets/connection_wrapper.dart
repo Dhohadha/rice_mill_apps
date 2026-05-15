@@ -61,11 +61,9 @@ class _StatusOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: Container(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(32),
           child: Column(
@@ -74,7 +72,7 @@ class _StatusOverlay extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 80, color: color),
@@ -101,7 +99,7 @@ class _StatusOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 48),
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(color.withOpacity(0.5)),
+                valueColor: AlwaysStoppedAnimation<Color>(color.withValues(alpha: 0.5)),
                 strokeWidth: 2,
               ),
               const SizedBox(height: 16),
@@ -116,7 +114,6 @@ class _StatusOverlay extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }

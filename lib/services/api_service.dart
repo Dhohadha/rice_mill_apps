@@ -8,12 +8,14 @@ import '../models/meter_data.dart';
 
 class ApiService {
   // Using 10.0.2.2 for Android Emulator, localhost for others
+  static const String _defaultIP = '192.168.1.5';
+  static const String _envIP = String.fromEnvironment('API_IP', defaultValue: _defaultIP);
+
   static String get baseUrl {
-    if (kIsWeb) return 'http://10.156.12.35:8000';
+    if (kIsWeb) return 'http://192.168.64.1:8000';
     try {
-      // Use the real IP for mobile debugging
       if (Platform.isAndroid || Platform.isIOS) {
-        return 'http://10.156.12.35:8000';
+        return 'http://192.168.64.1:8000';
       }
     } catch (_) {}
     return 'http://localhost:8000';
@@ -30,12 +32,17 @@ class ApiService {
   } 
 
   Future<bool> checkHealth() async {
-    try {
-      final response = await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 3));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+    // Try up to 2 times before deciding it's offline
+    for (int i = 0; i < 2; i++) {
+      try {
+        final response = await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 7));
+        if (response.statusCode == 200) return true;
+      } catch (e) {
+        debugPrint('⚠️ Health check attempt ${i + 1} failed: $e');
+      }
+      if (i == 0) await Future.delayed(const Duration(seconds: 1));
     }
+    return false;
   }
 
   Future<Map<String, dynamic>?> syncUser() async {

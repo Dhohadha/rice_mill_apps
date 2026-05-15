@@ -102,61 +102,62 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return ConnectionWrapper(
-      child: MaterialApp(
-        title: 'Rice Mill Monitoring',
-        navigatorKey: _navigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-          useMaterial3: true,
-          textTheme: const TextTheme(
-            headlineMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
-            titleMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-          ),
+    return MaterialApp(
+      title: 'Rice Mill Monitoring',
+      navigatorKey: _navigatorKey,
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        useMaterial3: true,
+        textTheme: const TextTheme(
+          headlineMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+          titleMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
         ),
-        home: Consumer(
-          builder: (context, ref, child) {
-            final authState = ref.watch(authServiceProvider).authStateChanges;
-            
-            return StreamBuilder(
-              stream: authState,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                }
-                
-                if (snapshot.hasData) {
-                  return Consumer(
-                    builder: (context, ref, child) {
-                      final userProfile = ref.watch(userProfileProvider);
-                      
-                      return userProfile.when(
-                        data: (profile) {
-                          if (profile == null) return const NotRegisteredScreen();
-                          
-                          final role = profile['role'];
-                          final devices = profile['assignedDevices'] as List<dynamic>? ?? [];
-                          final invites = profile['pendingInvitations'] as List<dynamic>? ?? [];
+      ),
+      builder: (context, child) {
+        return ConnectionWrapper(child: child!);
+      },
+      home: Consumer(
+        builder: (context, ref, child) {
+          final authState = ref.watch(authServiceProvider).authStateChanges;
+          
+          return StreamBuilder(
+            stream: authState,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              }
+              
+              if (snapshot.hasData) {
+                return Consumer(
+                  builder: (context, ref, child) {
+                    final userProfile = ref.watch(userProfileProvider);
+                    
+                    return userProfile.when(
+                      data: (profile) {
+                        if (profile == null) return const NotRegisteredScreen();
+                        
+                        final role = profile['role'];
+                        final devices = profile['assignedDevices'] as List<dynamic>? ?? [];
+                        final invites = profile['pendingInvitations'] as List<dynamic>? ?? [];
 
-                          if (role == 'Guest' && devices.isEmpty && invites.isEmpty) {
-                            return const GuestScreen();
-                          }
+                        if (role == 'Guest' && devices.isEmpty && invites.isEmpty) {
+                          return const GuestScreen();
+                        }
 
-                          return const MainScreen();
-                        },
-                        loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-                        error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
-                      );
-                    },
-                  );
-                }
-                
-                return const LoginScreen();
-              },
-            );
-          },
-        ),
+                        return const MainScreen();
+                      },
+                      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+                      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+                    );
+                  },
+                );
+              }
+              
+              return const LoginScreen();
+            },
+          );
+        },
       ),
     );
   }
