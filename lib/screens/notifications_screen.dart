@@ -8,6 +8,8 @@ class NotificationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
+    final userProfile = ref.watch(userProfileProvider);
+    final deviceCount = (userProfile.value?['assignedDevices'] as List<dynamic>? ?? []).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -73,7 +75,7 @@ class NotificationsScreen extends ConsumerWidget {
                       title: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (n['deviceId'] != null)
+                          if (n['deviceId'] != null && deviceCount > 1)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               margin: const EdgeInsets.only(bottom: 4),
@@ -98,7 +100,7 @@ class NotificationsScreen extends ConsumerWidget {
                 },
               ),
         error: (e, _) => Center(child: Text('Error: $e')),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SizedBox.shrink(),
       ),
     );
   }

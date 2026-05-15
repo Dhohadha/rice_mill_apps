@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../models/app_settings.dart';
 import '../models/meter_data.dart';
 

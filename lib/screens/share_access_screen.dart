@@ -62,7 +62,7 @@ class _ShareAccessScreenState extends ConsumerState<ShareAccessScreen> {
         foregroundColor: Colors.white,
       ),
       body: userProfile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SizedBox.shrink(),
         error: (err, _) => Center(child: Text('Error loading devices: $err')),
         data: (profile) {
           final allDevices = List<String>.from(
@@ -197,8 +197,9 @@ class _ShareAccessScreenState extends ConsumerState<ShareAccessScreen> {
                         .read(apiServiceProvider)
                         .getSharedDetails(profile!['email']),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData)
-                        return const Center(child: CircularProgressIndicator());
+                      if (!snapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
                       if (snapshot.data!.isEmpty) {
                         return const Padding(
                           padding: EdgeInsets.symmetric(vertical: 20),

@@ -14,7 +14,7 @@ import 'screens/guest_screen.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/providers.dart';
-import 'widgets/connection_wrapper.dart';
+
 
 Future<void> _requestPermissions() async {
   if (Platform.isAndroid) {
@@ -114,9 +114,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           titleMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
         ),
       ),
-      builder: (context, child) {
-        return ConnectionWrapper(child: child!);
-      },
+
       home: Consumer(
         builder: (context, ref, child) {
           final authState = ref.watch(authServiceProvider).authStateChanges;

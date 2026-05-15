@@ -8,20 +8,21 @@ import '../models/meter_data.dart';
 
 class ApiService {
   // Using 10.0.2.2 for Android Emulator, localhost for others
-  static const String _defaultIP = '192.168.1.5';
-  static const String _envIP = String.fromEnvironment('API_IP', defaultValue: _defaultIP);
+  static const String _defaultIP = '13.233.76.8';
+  static const String _envIP = String.fromEnvironment(
+    'API_IP',
+    defaultValue: _defaultIP,
+  );
 
   static String get baseUrl {
-    if (kIsWeb) return 'http://192.168.64.1:8000';
+    if (kIsWeb) return 'http://$_envIP:8000';
     try {
       if (Platform.isAndroid || Platform.isIOS) {
-        return 'http://192.168.64.1:8000';
+        return 'http://$_envIP:8000';
       }
     } catch (_) {}
     return 'http://localhost:8000';
   }
-
-
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -29,20 +30,6 @@ class ApiService {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
-  } 
-
-  Future<bool> checkHealth() async {
-    // Try up to 2 times before deciding it's offline
-    for (int i = 0; i < 2; i++) {
-      try {
-        final response = await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 7));
-        if (response.statusCode == 200) return true;
-      } catch (e) {
-        debugPrint('⚠️ Health check attempt ${i + 1} failed: $e');
-      }
-      if (i == 0) await Future.delayed(const Duration(seconds: 1));
-    }
-    return false;
   }
 
   Future<Map<String, dynamic>?> syncUser() async {
@@ -114,7 +101,9 @@ class ApiService {
   Future<double> getDailyUsage(String dateStr, String deviceId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/daily-usage?fromDate=$dateStr&deviceId=$deviceId'),
+        Uri.parse(
+          '$baseUrl/api/daily-usage?fromDate=$dateStr&deviceId=$deviceId',
+        ),
         headers: await _getHeaders(),
       );
       if (response.statusCode == 200) {
@@ -214,26 +203,37 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> get7DayUsage(String deviceId) async {
+  Future<List<dynamic>> getHistoricalUsage(String deviceId, {int days = 50}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/analysis/7day-usage?deviceId=$deviceId'),
+        Uri.parse(
+          '$baseUrl/api/analysis/historical-usage?deviceId=$deviceId&days=$days',
+        ),
         headers: await _getHeaders(),
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as List<dynamic>;
       }
     } catch (e) {
-      debugPrint('Error fetching 7-day usage: $e');
+      debugPrint('Error fetching historical usage: $e');
     }
     return [];
   }
 
-  Future<Map<String, dynamic>?> getPeriodStats(String deviceId, DateTime fromDate) async {
+  Future<Map<String, dynamic>?> getPeriodStats(
+    String deviceId,
+    DateTime fromDate, {
+    DateTime? toDate,
+  }) async {
     try {
       final dateStr = fromDate.toIso8601String();
+      String url =
+          '$baseUrl/api/analysis/period-stats?deviceId=$deviceId&fromDate=$dateStr';
+      if (toDate != null) {
+        url += '&toDate=${toDate.toIso8601String()}';
+      }
       final response = await http.get(
-        Uri.parse('$baseUrl/api/analysis/period-stats?deviceId=$deviceId&fromDate=$dateStr'),
+        Uri.parse(url),
         headers: await _getHeaders(),
       );
       if (response.statusCode == 200) {
@@ -245,7 +245,10 @@ class ApiService {
     return null;
   }
 
-  Future<Map<String, dynamic>?> getMixedStats(List<String> deviceIds, DateTime fromDate) async {
+  Future<Map<String, dynamic>?> getMixedStats(
+    List<String> deviceIds,
+    DateTime fromDate,
+  ) async {
     try {
       final dateStr = fromDate.toIso8601String();
       String query = 'fromDate=$dateStr';
@@ -331,6 +334,45 @@ class ApiService {
       }
     } catch (e) {
       debugPrint('Error fetching shared details: $e');
+    }
+    return [];
+  }
+
+  Future<double> getRangeUsage(
+    String deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    try {
+      final fromStr = from.toIso8601String();
+      final toStr = to.toIso8601String();
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/api/analysis/range-usage?deviceId=$deviceId&fromDate=$fromStr&toDate=$toStr',
+        ),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return (data['totalKWhConsumed'] ?? 0).toDouble();
+      }
+    } catch (e) {
+      debugPrint('Error fetching range usage: $e');
+    }
+    return 0.0;
+  }
+
+  Future<List<dynamic>> getMonthlyUsage(String deviceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/analysis/monthly-usage?deviceId=$deviceId'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error fetching monthly usage: $e');
     }
     return [];
   }

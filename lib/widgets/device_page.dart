@@ -14,11 +14,7 @@ class DevicePage extends ConsumerWidget {
   final String deviceId;
   final String millName;
 
-  const DevicePage({
-    super.key,
-    required this.deviceId,
-    required this.millName,
-  });
+  const DevicePage({super.key, required this.deviceId, required this.millName});
 
   Future<void> _selectDate(BuildContext context, WidgetRef ref) async {
     final selectedDate = ref.read(selectedDateProvider);
@@ -78,6 +74,7 @@ class DevicePage extends ConsumerWidget {
     final todayKwh = ref.watch(todayKwhProvider(deviceId));
     final selectedDate = ref.watch(selectedDateProvider);
     final alertState = ref.watch(alertManagerProvider(deviceId));
+    final userProfile = ref.watch(userProfileProvider);
 
     return mqttData.when(
       loading: () => const Center(
@@ -107,18 +104,30 @@ class DevicePage extends ConsumerWidget {
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                Text(
-                  'Device ID: $deviceId',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 20),
+                if ((userProfile.value?['assignedDevices'] as List<dynamic>? ??
+                            [])
+                        .length >
+                    1) ...[
+                  Text(
+                    'Device ID: $deviceId',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 if (alertState.activeAlerts.isNotEmpty)
                   Column(
                     children: [
                       ...alertState.activeAlerts.map(
                         (alert) => Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.red[50],
                             borderRadius: BorderRadius.circular(12),
@@ -126,28 +135,53 @@ class DevicePage extends ConsumerWidget {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.red,
+                                size: 22,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   alert,
-                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: alertState.isAlarmStopped
                                     ? null
-                                    : () => ref.read(alertManagerProvider(deviceId).notifier).stopAlarm(),
+                                    : () => ref
+                                          .read(
+                                            alertManagerProvider(
+                                              deviceId,
+                                            ).notifier,
+                                          )
+                                          .stopAlarm(),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: alertState.isAlarmStopped ? Colors.grey : Colors.red,
+                                    color: alertState.isAlarmStopped
+                                        ? Colors.grey
+                                        : Colors.red,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    alertState.isAlarmStopped ? 'STOPPED' : 'STOP',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                    alertState.isAlarmStopped
+                                        ? 'STOPPED'
+                                        : 'STOP',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -194,25 +228,29 @@ class DevicePage extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: _buildMetricCard('LIVE KVA', data.kVATotal.toStringAsFixed(2))),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'LIVE KVA',
+                              data.kVATotal.toStringAsFixed(2),
+                            ),
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: _buildMetricCard(
-                              'TOTAL KWH',
+                              'TOTAL UNIT READINGS',
                               data.kWh.toStringAsFixed(1),
-                              footer: const Text('(Unit Reading)', style: TextStyle(fontSize: 10, color: Colors.black45)),
+                              //footer: const Text('(Unit Reading)', style: TextStyle(fontSize: 10, color: Colors.black45)),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
                             child: _buildMetricCard(
                               'POWER FACTOR',
                               data.pfAvg.toStringAsFixed(3),
-                             
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -220,13 +258,16 @@ class DevicePage extends ConsumerWidget {
                             child: _buildMetricCard(
                               'P.F LIMIT',
                               settings?.pfLimit.toStringAsFixed(3) ?? '0.900',
-                               footer: Row(
+                              footer: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('Limit: ${settings?.pfLimit.toStringAsFixed(2) ?? "0.90"}', 
-                                    style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.edit, size: 10, color: Colors.black45),
+                                  Text(
+                                    'Limit: ${settings?.pfLimit.toStringAsFixed(2) ?? "0.90"}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.black45,
+                                    ),
+                                  ),
                                 ],
                               ),
                               onTap: () => _navToSettings(
@@ -250,9 +291,15 @@ class DevicePage extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.teal.withValues(alpha: 0.1)),
+                    border: Border.all(
+                      color: Colors.teal.withValues(alpha: 0.1),
+                    ),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 5)),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
                     ],
                   ),
                   child: Row(
@@ -262,24 +309,34 @@ class DevicePage extends ConsumerWidget {
                           'TODAY UNITS',
                           todayKwh.when(
                             data: (d) => d.toStringAsFixed(1),
-                            error: (_, __) => 'Error',
+                            error: (_, _) => 'Error',
                             loading: () => '...',
                           ),
-                          footer: const Text('12AM - Now', style: TextStyle(fontSize: 10, color: Colors.black45)),
+                          footer: const Text(
+                            '12AM - Now',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.black45,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildMetricCard(
-                          'TOTAL SINCE',
+                          'CONSUMED UNITS',
                           consumedKwh.when(
                             data: (d) => d.toStringAsFixed(1),
-                            error: (_, __) => 'Error',
+                            error: (_, _) => 'Error',
                             loading: () => '...',
                           ),
                           footer: Text(
                             'From ${DateFormat('dd MMM').format(selectedDate)}',
-                            style: TextStyle(fontSize: 10, color: Colors.blue[700], fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           onTap: () => _selectDate(context, ref),
                         ),
@@ -297,17 +354,24 @@ class DevicePage extends ConsumerWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AnalysisScreen(deviceId: deviceId),
+                          builder: (context) =>
+                              AnalysisScreen(deviceId: deviceId),
                         ),
                       );
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.teal, width: 2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                     child: const Text(
                       'Day Wise Units (Analysis)',
-                      style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(
+                        color: Colors.teal,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -332,11 +396,41 @@ class DevicePage extends ConsumerWidget {
                   height: 200,
                   padding: const EdgeInsets.only(right: 16, top: 16),
                   child: graphData.when(
-                    data: (data) => data.isEmpty
-                        ? const Center(child: Text('No history data available'))
-                        : LineChart(_buildChartData(data, settings)),
+                    data: (data) {
+                      if (data.isEmpty) return const Center(child: Text('No history data available'));
+                      
+                      if (isDayGraph) {
+                        // For the 24-hour graph, make it extremely compact (10px per point)
+                        double chartWidth = data.length * 10.0;
+                        double minWidth = MediaQuery.of(context).size.width - 32 - 40; // Subtract axis width
+
+                        return Row(
+                          children: [
+                            // Sticky Y-Axis
+                            SizedBox(
+                              width: 40,
+                              child: LineChart(_buildChartData([], settings, isDayGraph, showLeftTitles: true)),
+                            ),
+                            // Scrollable Graph Area
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                reverse: true,
+                                child: SizedBox(
+                                  width: chartWidth < minWidth ? minWidth : chartWidth,
+                                  child: LineChart(_buildChartData(data, settings, isDayGraph, showLeftTitles: false)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      } else {
+                        // For the 1-hour graph, keep it fixed to the screen width
+                        return LineChart(_buildChartData(data, settings, isDayGraph, showLeftTitles: true));
+                      }
+                    },
                     error: (e, _) => Center(child: Text('Error: $e')),
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () => const SizedBox.shrink(),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -371,11 +465,22 @@ class DevicePage extends ConsumerWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+          ),
         ),
         const SizedBox(height: 4),
         GestureDetector(
-          onTap: () => _navToSettings(context, ref, '$title Settings', title, limit, max),
+          onTap: () => _navToSettings(
+            context,
+            ref,
+            '$title Settings',
+            title,
+            limit,
+            max,
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -388,21 +493,38 @@ class DevicePage extends ConsumerWidget {
               children: [
                 Text(
                   ' Limit: ${limit.toStringAsFixed(1)} $unit',
-                  style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.edit, size: 10, color: Colors.orange),
               ],
             ),
           ),
         ),
         const SizedBox(height: 8),
-        GaugeWidget(title: '', value: value, max: max, unit: unit),
+        GestureDetector(
+          onTap: () => _navToSettings(
+            context,
+            ref,
+            '$title Settings',
+            title,
+            limit,
+            max,
+          ),
+          child: GaugeWidget(title: '', value: value, max: max, unit: unit),
+        ),
       ],
     );
   }
 
-  Widget _buildMetricCard(String label, String value, {Widget? footer, VoidCallback? onTap}) {
+  Widget _buildMetricCard(
+    String label,
+    String value, {
+    Widget? footer,
+    VoidCallback? onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -414,7 +536,12 @@ class DevicePage extends ConsumerWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 label,
-                style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black87, fontSize: 12, letterSpacing: 0.5),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black87,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
                 maxLines: 1,
               ),
             ),
@@ -426,7 +553,11 @@ class DevicePage extends ConsumerWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
                 ],
               ),
               child: Center(
@@ -437,7 +568,9 @@ class DevicePage extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
-                      color: label == 'CONSUMED kWh' ? Colors.blue[800] : Colors.black87,
+                      color: label == 'CONSUMED kWh'
+                          ? Colors.blue[800]
+                          : Colors.black87,
                     ),
                   ),
                 ),
@@ -465,20 +598,48 @@ class DevicePage extends ConsumerWidget {
         ),
         child: Text(
           text,
-          style: TextStyle(color: isActive ? Colors.white : Colors.black38, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.black38,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
   }
 
-  LineChartData _buildChartData(List<dynamic> data, AppSettings? settings) {
+  LineChartData _buildChartData(List<dynamic> data, AppSettings? settings, bool isDayGraph, {required bool showLeftTitles}) {
     double maxY = settings?.cmdMaxGauge ?? 250;
     if (maxY < 10) maxY = 250;
 
     return LineChartData(
       minY: 0,
       maxY: maxY,
-      gridData: const FlGridData(show: true, drawVerticalLine: false),
+      lineTouchData: LineTouchData(
+        touchTooltipData: LineTouchTooltipData(
+          getTooltipColor: (spot) => Colors.blue.withValues(alpha: 0.8),
+          getTooltipItems: (touchedSpots) {
+            return touchedSpots.map((spot) {
+              // Only show tooltip for the first bar (KVA)
+              if (spot.barIndex == 0) {
+                return LineTooltipItem(
+                  '${spot.y.toStringAsFixed(2)} KVA',
+                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                );
+              }
+              return null;
+            }).toList();
+          },
+        ),
+      ),
+      gridData: FlGridData(
+        show: true,
+        drawHorizontalLine: true,
+        drawVerticalLine: true,
+        verticalInterval: isDayGraph ? 1 : 4, // 1 unit for day-wise, 4 units for hour-wise
+        horizontalInterval: maxY / 5,
+        getDrawingHorizontalLine: (value) => FlLine(color: Colors.black.withValues(alpha: 0.05), strokeWidth: 1),
+        getDrawingVerticalLine: (value) => FlLine(color: Colors.black.withValues(alpha: 0.05), strokeWidth: 1),
+      ),
       extraLinesData: ExtraLinesData(
         horizontalLines: [
           HorizontalLine(
@@ -490,46 +651,105 @@ class DevicePage extends ConsumerWidget {
               show: true,
               alignment: Alignment.topRight,
               labelResolver: (line) => 'Limit',
-              style: TextStyle(color: Colors.red.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.red.withValues(alpha: 0.8),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
       ),
       titlesData: FlTitlesData(
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: false),
+        ),
         leftTitles: AxisTitles(
           sideTitles: SideTitles(
-            showTitles: true,
+            showTitles: showLeftTitles,
             reservedSize: 40,
             getTitlesWidget: (value, meta) => SideTitleWidget(
               meta: meta,
               child: Text(
                 value.toStringAsFixed(0),
-                style: const TextStyle(color: Colors.black54, fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
         ),
-        bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: isDayGraph,
+            reservedSize: 30,
+            interval: 6, // 6 hours gap for the ultra-compact Day graph
+            getTitlesWidget: (value, meta) {
+              int index = value.toInt();
+              if (index < 0 || index >= data.length) return const Text('');
+              
+              final timestamp = data[index]['timestamp'];
+              if (timestamp == null) return const Text('');
+              final date = DateTime.parse(timestamp).toLocal();
+
+              String label = DateFormat('HH:mm').format(date);
+
+              return SideTitleWidget(
+                meta: meta,
+                space: 8,
+                child: Text(
+                  label,
+                  style: const TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          ),
+        ),
       ),
       borderData: FlBorderData(show: false),
       lineBarsData: [
         LineChartBarData(
-          spots: data.asMap().entries.map((e) => FlSpot(e.key.toDouble(), ((e.value['KVA'] ?? 0) as num).toDouble())).toList(),
+          spots: data
+              .asMap()
+              .entries
+              .map(
+                (e) => FlSpot(
+                  e.key.toDouble(),
+                  ((e.value['KVA'] ?? 0) as num).toDouble(),
+                ),
+              )
+              .toList(),
           isCurved: true,
           color: Colors.blue.withValues(alpha: 0.7),
-          barWidth: 3,
+          barWidth: 1.5,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: true, color: Colors.blue.withValues(alpha: 0.1)),
+          belowBarData: BarAreaData(
+            show: true,
+            color: Colors.blue.withValues(alpha: 0.1),
+          ),
         ),
         LineChartBarData(
-          spots: data.asMap().entries.map((e) => FlSpot(e.key.toDouble(), ((e.value['KW'] ?? 0) as num).toDouble())).toList(),
+          spots: data
+              .asMap()
+              .entries
+              .map(
+                (e) => FlSpot(
+                  e.key.toDouble(),
+                  ((e.value['KW'] ?? 0) as num).toDouble(),
+                ),
+              )
+              .toList(),
           isCurved: true,
           color: Colors.green.withValues(alpha: 0.7),
-          barWidth: 3,
+          barWidth: 1.5,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.1)),
+          belowBarData: BarAreaData(
+            show: true,
+            color: Colors.green.withValues(alpha: 0.1),
+          ),
         ),
       ],
     );
@@ -542,7 +762,11 @@ class DevicePage extends ConsumerWidget {
         const SizedBox(width: 4),
         Text(
           text,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54),
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.black54,
+          ),
         ),
       ],
     );

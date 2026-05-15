@@ -13,7 +13,6 @@ const UserSettings = require('./models/UserSettings');
 const Notification = require('./models/Notification');
 const DeviceToken = require('./models/DeviceToken');
 const User = require('./models/User');
-const CondensedData = require('./models/CondensedData');
 const admin = require('firebase-admin');
 
 // Routes
@@ -152,21 +151,9 @@ mqttClient.on('message', async (topic, message) => {
       if (now - lastSaveTime >= SAVE_INTERVAL) {
         const newData = new MeterData(payload);
         await newData.save();
-        
-        // Also save condensed data for long-term analysis (30 days)
-        const CondensedData = require('./models/CondensedData');
-        await new CondensedData({
-          deviceId: payload.deviceId,
-          KVA: payload.KVA,
-          KW: payload.KW,
-          PF: payload.PF,
-          KWH: payload.KWH,
-          timestamp: now
-        }).save();
-
-      lastSaveTimes.set(deviceId, now);
-      console.log(`💾 Data saved to MongoDB for ${deviceId}: KW=${payload.KW?.toFixed(2)}, KVA=${payload.KVA?.toFixed(2)}, PF=${payload.PF?.toFixed(3)}, KWH=${payload.KWH}`);
-    }
+        lastSaveTimes.set(deviceId, now);
+        console.log(`💾 Data saved to MongoDB for ${deviceId}: KW=${payload.KW?.toFixed(2)}, KVA=${payload.KVA?.toFixed(2)}, PF=${payload.PF?.toFixed(3)}, KWH=${payload.KWH}`);
+      }
 
     // Emit data over WebSockets to specific device room
     io.to(payload.deviceId).emit('meterData', payload);
@@ -207,12 +194,13 @@ mqttClient.on('message', async (topic, message) => {
               title: `Limit Exceeded`, 
               message: alert.msg, 
               type: alert.type,
-              userEmail: user.email 
+              userEmail: user.email.toLowerCase() 
             }).save();
             
             // Send FCM push notifications to THIS user specifically
             try {
-              const tokens = await DeviceToken.find({ userEmail: user.email });
+              const normalizedEmail = user.email.toLowerCase();
+              const tokens = await DeviceToken.find({ userEmail: normalizedEmail });
               const registrationTokens = tokens.map(t => t.token);
 
               if (registrationTokens.length > 0) {
@@ -266,27 +254,73 @@ cron.schedule('0 0 * * *', async () => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    // Get all unique device IDs from MeterData
     const deviceIds = await MeterData.distinct('deviceId');
     console.log(`⏰ Running midnight cron for ${deviceIds.length} devices...`);
 
     for (const deviceId of deviceIds) {
-      // Find min and max KWH for the day for THIS device
-      const minRec = await MeterData.findOne({ deviceId, timestamp: { $gte: yesterday, $lt: todayStart } }).sort({ KWH: 1 });
-      const maxRec = await MeterData.findOne({ deviceId, timestamp: { $gte: yesterday, $lt: todayStart } }).sort({ KWH: -1 });
+      // 1. Consumption calculation
+      const minRec = await MeterData.findOne({ 
+        deviceId, 
+        timestamp: { $gte: yesterday, $lt: todayStart }, 
+        KWH: { $gt: 0 } 
+      }).sort({ KWH: 1 });
+      
+      const maxRec = await MeterData.findOne({ 
+        deviceId, 
+        timestamp: { $gte: yesterday, $lt: todayStart } 
+      }).sort({ KWH: -1 });
 
       if (minRec && maxRec) {
         let consumedKWh = maxRec.KWH - minRec.KWH;
         if (consumedKWh < 0) consumedKWh = maxRec.KWH; // Handle reset
 
+        // 2. Aggregate Max/Min/Avg
+        const stats = await MeterData.aggregate([
+          { $match: { deviceId, timestamp: { $gte: yesterday, $lt: todayStart } } },
+          { $group: {
+            _id: null,
+            avgPF: { $avg: "$PF" }
+          }}
+        ]);
+
+        const getDayExtreme = async (field, sortOrder, excludeZero = false) => {
+          let query = { deviceId, timestamp: { $gte: yesterday, $lt: todayStart } };
+          if (excludeZero) query[field] = { $gt: 0 };
+          return await MeterData.findOne(query).sort({ [field]: sortOrder }).lean();
+        };
+
+        const maxKVA = await getDayExtreme('KVA', -1);
+        const minKVA = await getDayExtreme('KVA', 1, true);
+        const maxKW = await getDayExtreme('KW', -1);
+        const minKW = await getDayExtreme('KW', 1, true);
+
         await DailyUsage.updateOne(
           { date: yesterday, deviceId },
-          { totalKWh: consumedKWh },
+          { 
+            totalKWh: consumedKWh,
+            maxKVA: maxKVA ? maxKVA.KVA : 0,
+            maxKVATime: maxKVA ? maxKVA.timestamp : null,
+            minKVA: minKVA ? minKVA.KVA : 0,
+            minKVATime: minKVA ? minKVA.timestamp : null,
+            maxKW: maxKW ? maxKW.KW : 0,
+            maxKWTime: maxKW ? maxKW.timestamp : null,
+            minKW: minKW ? minKW.KW : 0,
+            minKWTime: minKW ? minKW.timestamp : null,
+            avgPF: (stats.length > 0) ? (stats[0].avgPF || 0) : 0
+          },
           { upsert: true }
         );
-        console.log(`✅ Daily usage [${deviceId}] for ${yesterday.toDateString()}: ${consumedKWh.toFixed(2)} kWh`);
+        console.log(`✅ Daily summary [${deviceId}] for ${yesterday.toDateString()} saved.`);
       }
     }
+
+    // 3. Cleanup: Delete data older than 2 days
+    const cleanupDate = new Date();
+    cleanupDate.setDate(cleanupDate.getDate() - 2);
+    const resultMeter = await MeterData.deleteMany({ timestamp: { $lt: cleanupDate } });
+    const resultCond = await CondensedData.deleteMany({ timestamp: { $lt: cleanupDate } });
+    console.log(`🧹 Cleanup: Removed ${resultMeter.deletedCount} MeterData and ${resultCond.deletedCount} CondensedData records.`);
+
   } catch (err) {
     console.error('Error in cron job:', err);
   }
@@ -417,7 +451,7 @@ app.delete('/api/notifications/:id', verifyToken, async (req, res) => {
 app.post('/api/fcm-token', verifyToken, async (req, res) => {
   try {
     const { token } = req.body;
-    const userEmail = req.user.email;
+    const userEmail = req.user.email.toLowerCase();
     if (!token) return res.status(400).json({ error: 'Token is required' });
 
     await DeviceToken.findOneAndUpdate(
@@ -562,17 +596,17 @@ app.get('/api/today-usage', async (req, res) => {
 
 // ================= Analysis APIs =================
 
-// 1. Get 7-Day KWH Usage
-app.get('/api/analysis/7day-usage', async (req, res) => {
+// 1. Get Historical KWH Usage (up to 50 days)
+app.get('/api/analysis/historical-usage', async (req, res) => {
   try {
-    const { deviceId } = req.query;
+    const { deviceId, days: daysCount = 7 } = req.query;
     if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
 
+    const limit = Math.min(parseInt(daysCount), 60); // Cap at 60 days
     const results = [];
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
-    // We want the last 7 days ending with today
-    for (let i = 6; i >= 0; i--) {
+    for (let i = limit - 1; i >= 0; i--) {
       const targetDate = new Date();
       targetDate.setDate(targetDate.getDate() - i);
       targetDate.setHours(0, 0, 0, 0);
@@ -587,11 +621,14 @@ app.get('/api/analysis/7day-usage', async (req, res) => {
         kwh = record ? record.totalKWh : 0;
       }
 
-      results.push({
-        label: days[targetDate.getDay()],
-        fullDate: targetDate,
-        kwh: kwh
-      });
+      // Only include day if data was recorded (kwh > 0) OR if it's Today (i === 0)
+      if (kwh > 0 || i === 0) {
+        results.push({
+          label: dayNames[targetDate.getDay()],
+          fullDate: targetDate,
+          kwh: kwh
+        });
+      }
     }
 
     res.json(results);
@@ -600,118 +637,99 @@ app.get('/api/analysis/7day-usage', async (req, res) => {
   }
 });
 
-// 2. Get Period Max/Min Stats (KVA, KWH)
+// 2. Get Period Max/Min Stats (KVA, KW, PF)
 app.get('/api/analysis/period-stats', async (req, res) => {
   try {
-    const { deviceId, fromDate } = req.query;
+    const { deviceId, fromDate, toDate } = req.query;
     if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
     
     const start = fromDate ? new Date(fromDate) : new Date();
     if (!fromDate) start.setHours(0, 0, 0, 0);
-
-    let stats = await CondensedData.aggregate([
-      { $match: { deviceId, timestamp: { $gte: start } } },
-      { $group: {
-        _id: null,
-        avgPF: { $sum: "$PF" },
-        count: { $sum: 1 }
-      }}
-    ]);
-
-    // Fallback for avgPF if CondensedData is empty (common for today)
-    if (stats.length === 0) {
-      stats = await MeterData.aggregate([
-        { $match: { deviceId, timestamp: { $gte: start } } },
-        { $group: {
-          _id: null,
-          avgPF: { $sum: "$PF" },
-          count: { $sum: 1 }
-        }}
-      ]);
-    }
-
-    const avgPF = (stats.length > 0 && stats[0].count > 0) ? (stats[0].avgPF / stats[0].count) : 0;
-
-    // Helper to query either CondensedData or MeterData (fallback)
-    async function getExtreme(field, sortOrder, excludeZero = false) {
-      let query = { deviceId, timestamp: { $gte: start } };
-      if (excludeZero) query[field] = { $gt: 0 };
-
-      // 1. Try CondensedData first
-      let record = await CondensedData.findOne(query).sort({ [field]: sortOrder }).lean();
-      
-      // 2. Fallback to MeterData if CondensedData has no records (common for "today")
-      if (!record) {
-        record = await MeterData.findOne(query).sort({ [field]: sortOrder }).lean();
-      }
-      return record;
-    }
-
-    const maxKVA = await getExtreme('KVA', -1);
-    const minKVA = await getExtreme('KVA', 1, true);
-    const maxKWH = await getExtreme('KWH', -1);
-    const minKWH = await getExtreme('KWH', 1, true);
-    const maxKW = await getExtreme('KW', -1);
-    const minKW = await getExtreme('KW', 1, true);
-
-    res.json({
-      kva: {
-        max: maxKVA ? maxKVA.KVA : 0,
-        maxTime: maxKVA ? maxKVA.timestamp : null,
-        min: minKVA ? minKVA.KVA : 0,
-        minTime: minKVA ? minKVA.timestamp : null,
-      },
-      kw: {
-        max: maxKW ? maxKW.KW : 0,
-        maxTime: maxKW ? maxKW.timestamp : null,
-        min: minKW ? minKW.KW : 0,
-        minTime: minKW ? minKW.timestamp : null,
-      },
-      kwh: {
-        max: maxKWH ? maxKWH.KWH : 0,
-        maxTime: maxKWH ? maxKWH.timestamp : null,
-        min: minKWH ? minKWH.KWH : 0,
-        minTime: minKWH ? minKWH.timestamp : null,
-      },
-      avgPF: avgPF
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 2. Get Today's Max/Min Stats (KVA, KW, KWH)
-app.get('/api/analysis/today-stats', async (req, res) => {
-  try {
-    const { deviceId } = req.query;
-    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+    const end = toDate ? new Date(toDate) : new Date();
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const CondensedData = require('./models/CondensedData');
-    const stats = await CondensedData.aggregate([
-      { $match: { deviceId, timestamp: { $gte: todayStart } } },
-      { $group: {
-        _id: null,
-        maxKVA: { $max: "$KVA" },
-        minKVA: { $min: "$KVA" },
-        maxKW: { $max: "$KW" },
-        minKW: { $min: "$KW" },
-        startKWH: { $min: "$KWH" },
-        endKWH: { $max: "$KWH" },
-        avgPF: { $avg: "$PF" }
-      }}
-    ]);
+    // 1. Get History from DailyUsage (up to yesterday)
+    const historicalUsages = await DailyUsage.find({
+      deviceId,
+      date: { $gte: start, $lt: todayStart }
+    }).lean();
 
-    if (stats.length === 0) return res.status(404).json({ error: 'No data for today yet' });
+    // 2. Get Live Today from MeterData
+    let todayStats = null;
+    if (end >= todayStart) {
+      const stats = await MeterData.aggregate([
+        { $match: { deviceId, timestamp: { $gte: todayStart, $lte: end } } },
+        { $group: {
+          _id: null,
+          avgPF: { $avg: "$PF" },
+          maxKVA: { $max: "$KVA" },
+          minKVA: { $min: { $cond: [{ $gt: ["$KVA", 0] }, "$KVA", 1000000] } }, // Use large fallback for min
+          maxKW: { $max: "$KW" },
+          minKW: { $min: { $cond: [{ $gt: ["$KW", 0] }, "$KW", 1000000] } },
+        }}
+      ]);
+      if (stats.length > 0) {
+        todayStats = stats[0];
+        // Correct min values if no data > 0 was found
+        if (todayStats.minKVA === 1000000) todayStats.minKVA = 0;
+        if (todayStats.minKW === 1000000) todayStats.minKW = 0;
+        
+        // For today's extreme times, we need a separate query since aggregate doesn't return which record had the max
+        const getLiveExtreme = async (field, sortOrder) => {
+          return await MeterData.findOne({ deviceId, timestamp: { $gte: todayStart, $lte: end }, [field]: { $gt: 0 } }).sort({ [field]: sortOrder }).lean();
+        };
+        todayStats.maxKVARec = await getLiveExtreme('KVA', -1);
+        todayStats.minKVARec = await getLiveExtreme('KVA', 1);
+        todayStats.maxKWRec = await getLiveExtreme('KW', -1);
+        todayStats.minKWRec = await getLiveExtreme('KW', 1);
+      }
+    }
 
-    const s = stats[0];
+    // Combine Historical and Today
+    const findGlobalMax = (hField, hTimeField, tVal, tTime) => {
+      let maxVal = tVal || 0;
+      let maxTime = tTime || null;
+      for (const u of historicalUsages) {
+        if ((u[hField] || 0) >= maxVal) {
+          maxVal = u[hField];
+          maxTime = u[hTimeField];
+        }
+      }
+      return { val: maxVal, time: maxTime };
+    };
+
+    const findGlobalMin = (hField, hTimeField, tVal, tTime) => {
+      let minVal = (tVal && tVal > 0) ? tVal : null;
+      let minTime = tTime || null;
+      for (const u of historicalUsages) {
+        if (u[hField] > 0 && (minVal === null || u[hField] <= minVal)) {
+          minVal = u[hField];
+          minTime = u[hTimeField];
+        }
+      }
+      return { val: minVal || 0, time: minTime };
+    };
+
+    const kvaMax = findGlobalMax('maxKVA', 'maxKVATime', todayStats?.maxKVA, todayStats?.maxKVARec?.timestamp);
+    const kvaMin = findGlobalMin('minKVA', 'minKVATime', todayStats?.minKVA, todayStats?.minKVARec?.timestamp);
+    const kwMax = findGlobalMax('maxKW', 'maxKWTime', todayStats?.maxKW, todayStats?.maxKWRec?.timestamp);
+    const kwMin = findGlobalMin('minKW', 'minKWTime', todayStats?.minKW, todayStats?.minKWRec?.timestamp);
+
+    // PF Avg
+    let totalPF = historicalUsages.reduce((sum, u) => sum + (u.avgPF || 0), 0);
+    let countPF = historicalUsages.length;
+    if (todayStats) {
+      totalPF += (todayStats.avgPF || 0);
+      countPF += 1;
+    }
+    const globalAvgPF = countPF > 0 ? totalPF / countPF : 0;
+
     res.json({
-      kva: { max: s.maxKVA || 0, min: s.minKVA || 0 },
-      kw: { max: s.maxKW || 0, min: s.minKW || 0 },
-      kwh: { start: s.startKWH || 0, end: s.endKWH || 0, consumed: (s.endKWH || 0) - (s.startKWH || 0) },
-      pf: { avg: s.avgPF || 0 }
+      kva: { max: kvaMax.val, maxTime: kvaMax.time, min: kvaMin.val, minTime: kvaMin.time },
+      kw: { max: kwMax.val, maxTime: kwMax.time, min: kwMin.val, minTime: kwMin.time },
+      avgPF: globalAvgPF
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -723,66 +741,139 @@ app.get('/api/analysis/mixed-stats', async (req, res) => {
   try {
     let { deviceIds, fromDate } = req.query;
     if (!deviceIds) return res.status(400).json({ error: 'deviceIds are required' });
-    
-    // Ensure deviceIds is an array
     if (!Array.isArray(deviceIds)) deviceIds = [deviceIds];
 
     const start = fromDate ? new Date(fromDate) : new Date();
     if (!fromDate) start.setHours(0, 0, 0, 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-    // 1. Calculate Total Consumed KWH (Live + Archived) for all devices
     let totalConsumed = 0;
+    let globalMaxKVA = 0;
+    let globalMaxKVATime = null;
+    let globalAvgPF = 0;
+    let pfCount = 0;
+
     for (const dId of deviceIds) {
       // Archived
-      const usages = await DailyUsage.find({ deviceId: dId, date: { $gte: start } }).lean();
-      totalConsumed += usages.reduce((sum, u) => sum + (u.totalKWh || 0), 0);
+      const summaries = await DailyUsage.find({ deviceId: dId, date: { $gte: start, $lt: todayStart } }).lean();
+      for (const s of summaries) {
+        totalConsumed += (s.totalKWh || 0);
+        if ((s.maxKVA || 0) > globalMaxKVA) {
+          globalMaxKVA = s.maxKVA;
+          globalMaxKVATime = s.maxKVATime;
+        }
+        globalAvgPF += (s.avgPF || 0);
+        pfCount++;
+      }
+      
       // Live Today
       totalConsumed += await calculateTodayConsumption(dId);
-    }
-
-    // 2. Aggregate Avg PF across all devices
-    let pfStats = await CondensedData.aggregate([
-      { $match: { deviceId: { $in: deviceIds }, timestamp: { $gte: start } } },
-      { $group: { _id: null, avgPF: { $sum: "$PF" }, count: { $sum: 1 } } }
-    ]);
-    if (pfStats.length === 0) {
-      pfStats = await MeterData.aggregate([
-        { $match: { deviceId: { $in: deviceIds }, timestamp: { $gte: start } } },
-        { $group: { _id: null, avgPF: { $sum: "$PF" }, count: { $sum: 1 } } }
+      const liveData = await MeterData.aggregate([
+        { $match: { deviceId: dId, timestamp: { $gte: todayStart } } },
+        { $group: { _id: null, maxKVA: { $max: "$KVA" }, avgPF: { $avg: "$PF" } } }
       ]);
+      if (liveData.length > 0) {
+        if (liveData[0].maxKVA > globalMaxKVA) {
+          globalMaxKVA = liveData[0].maxKVA;
+          // We could fetch the exact time but skipping for mixed stats to keep it fast
+          globalMaxKVATime = new Date(); 
+        }
+        globalAvgPF += (liveData[0].avgPF || 0);
+        pfCount++;
+      }
     }
-    const avgPF = (pfStats.length > 0 && pfStats[0].count > 0) ? (pfStats[0].avgPF / pfStats[0].count) : 0;
-
-    // 3. Find Global Extremes
-    async function getGlobalExtreme(field, sortOrder, excludeZero = false) {
-      let query = { deviceId: { $in: deviceIds }, timestamp: { $gte: start } };
-      if (excludeZero) query[field] = { $gt: 0 };
-      let record = await CondensedData.findOne(query).sort({ [field]: sortOrder }).lean();
-      if (!record) record = await MeterData.findOne(query).sort({ [field]: sortOrder }).lean();
-      return record;
-    }
-
-    const maxKVA = await getGlobalExtreme('KVA', -1);
-    const minKVA = await getGlobalExtreme('KVA', 1, true);
-    const maxKW = await getGlobalExtreme('KW', -1);
-    const minKW = await getGlobalExtreme('KW', 1, true);
 
     res.json({
       totalConsumedKWh: totalConsumed,
-      avgPF: avgPF,
-      kva: {
-        max: maxKVA ? maxKVA.KVA : 0,
-        maxTime: maxKVA ? maxKVA.timestamp : null,
-        min: minKVA ? minKVA.KVA : 0,
-        minTime: minKVA ? minKVA.timestamp : null,
-      },
-      kw: {
-        max: maxKW ? maxKW.KW : 0,
-        maxTime: maxKW ? maxKW.timestamp : null,
-        min: minKW ? minKW.KW : 0,
-        minTime: minKW ? minKW.timestamp : null,
-      }
+      avgPF: pfCount > 0 ? globalAvgPF / pfCount : 0,
+      kva: { max: globalMaxKVA, maxTime: globalMaxKVATime },
+      // Mixed stats usually only show top level summaries
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Get Consumption for a specific date range
+app.get('/api/analysis/range-usage', async (req, res) => {
+  try {
+    const { deviceId, fromDate, toDate } = req.query;
+    if (!deviceId || !fromDate || !toDate) {
+      return res.status(400).json({ error: 'deviceId, fromDate, and toDate are required' });
+    }
+
+    const start = new Date(fromDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(toDate);
+    end.setHours(0, 0, 0, 0);
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // 1. Get archived totals for the range
+    const usages = await DailyUsage.find({
+      deviceId,
+      date: { $gte: start, $lte: end }
+    }).lean();
+
+    let totalConsumed = usages.reduce((sum, u) => sum + (u.totalKWh || 0), 0);
+
+    // 2. If end date includes today, add live today consumption
+    if (end >= todayStart) {
+      totalConsumed += await calculateTodayConsumption(deviceId);
+    }
+
+    res.json({ totalKWhConsumed: totalConsumed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Get Monthly Consumption
+app.get('/api/analysis/monthly-usage', async (req, res) => {
+  try {
+    const { deviceId } = req.query;
+    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+
+    const monthlyData = await DailyUsage.aggregate([
+      { $match: { deviceId } },
+      { $group: {
+        _id: {
+          year: { $year: "$date" },
+          month: { $month: "$date" }
+        },
+        totalKWh: { $sum: "$totalKWh" }
+      }},
+      { $sort: { "_id.year": -1, "_id.month": -1 } }
+    ]);
+
+    // Format for easier consumption
+    const formattedData = monthlyData.map(d => ({
+      year: d._id.year,
+      month: d._id.month,
+      totalKWh: d.totalKWh
+    }));
+
+    // Add current month's live data
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    let currentMonthEntry = formattedData.find(d => d.year === currentYear && d.month === currentMonth);
+    const liveToday = await calculateTodayConsumption(deviceId);
+
+    if (currentMonthEntry) {
+      currentMonthEntry.totalKWh += liveToday;
+    } else {
+      formattedData.unshift({
+        year: currentYear,
+        month: currentMonth,
+        totalKWh: liveToday
+      });
+    }
+
+    res.json(formattedData);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -27,7 +27,11 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     final userProfile = ref.watch(userProfileProvider);
 
     return userProfile.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
+        body: Container(color: Colors.white),
+      ),
       error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
       data: (profile) {
         final devices = profile?['assignedDevices'] as List<dynamic>? ?? [];

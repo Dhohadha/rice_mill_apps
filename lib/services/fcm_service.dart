@@ -76,15 +76,18 @@ class FCMService {
     // App opened from background/terminated via notification
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('App opened from notification!');
-      // Navigate to notifications screen or handle payload
     });
 
-    // Get and register token
-    String? token = await _fcm.getToken();
-    if (token != null) {
-      debugPrint("FCM Token: $token");
-      await _registerTokenWithBackend(token);
-    }
+    // Listen to Auth State Changes to register token immediately upon login
+    FirebaseAuth.instance.authStateChanges().listen((user) async {
+      if (user != null) {
+        debugPrint("User logged in, checking FCM token...");
+        String? token = await _fcm.getToken();
+        if (token != null) {
+          await _registerTokenWithBackend(token);
+        }
+      }
+    });
 
     // Token refresh listener
     _fcm.onTokenRefresh.listen((newToken) {

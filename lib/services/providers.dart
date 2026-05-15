@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+
 import '../models/app_settings.dart';
 import '../models/meter_data.dart';
 import '../services/socket_service.dart';
@@ -9,23 +9,7 @@ import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 
-// Connectivity Provider
-final connectivityProvider = StreamProvider<ConnectivityResult>((ref) async* {
-  final initial = await Connectivity().checkConnectivity();
-  if (initial.isNotEmpty) yield initial.first;
-  yield* Connectivity().onConnectivityChanged.map((results) => results.first);
-});
 
-// Server Status Provider
-final serverStatusProvider = StreamProvider<bool>((ref) async* {
-  final api = ref.watch(apiServiceProvider);
-  // Check immediately
-  yield await api.checkHealth();
-  // Then check every 10 seconds
-  yield* Stream.periodic(const Duration(seconds: 10)).asyncMap((_) async {
-    return await api.checkHealth();
-  });
-});
 
 final apiServiceProvider = Provider((ref) => ApiService());
 final socketServiceProvider = Provider((ref) => SocketService());
@@ -119,10 +103,10 @@ final todayKwhProvider = FutureProvider.family<double, String>((ref, deviceId) a
   return await api.getTodayUsage(deviceId);
 });
 
-// Analysis: 7-Day Usage Provider
-final sevenDayUsageProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
+// Analysis: Historical Usage Provider (up to 50 days)
+final historicalUsageProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
   final api = ref.watch(apiServiceProvider);
-  return await api.get7DayUsage(deviceId);
+  return await api.getHistoricalUsage(deviceId, days: 50);
 });
 
 // Analysis: Period Stats Provider
@@ -172,6 +156,37 @@ final graphDataProvider = FutureProvider.family<List<dynamic>, String>((ref, dev
   final api = ref.watch(apiServiceProvider);
   final isDay = ref.watch(isDayGraphProvider);
   return await api.getHistory(isDay ? 'day' : 'hour', deviceId);
+});
+
+// Analysis: Monthly Usage Provider
+final monthlyUsageProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
+  final api = ref.watch(apiServiceProvider);
+  return await api.getMonthlyUsage(deviceId);
+});
+
+// The date currently selected in the AnalysisScreen chart
+final focusedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
+
+// Stats for a specific day (midnight to midnight)
+final dailyStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, deviceId) async {
+  final focusedDate = ref.watch(focusedDateProvider);
+  final api = ref.watch(apiServiceProvider);
+  final from = DateTime(focusedDate.year, focusedDate.month, focusedDate.day);
+  final to = from.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1));
+  return await api.getPeriodStats(deviceId, from, toDate: to);
+});
+
+// Consumption for a specific day
+final dailyConsumptionProvider = FutureProvider.family<double, String>((ref, deviceId) async {
+  final focusedDate = ref.watch(focusedDateProvider);
+  final api = ref.watch(apiServiceProvider);
+  final from = DateTime(focusedDate.year, focusedDate.month, focusedDate.day);
+  
+  final now = DateTime.now();
+  if (from.year == now.year && from.month == now.month && from.day == now.day) {
+    return await api.getTodayUsage(deviceId);
+  }
+  return await api.getRangeUsage(deviceId, from, from);
 });
 
 // Notifications Provider using AsyncNotifier
