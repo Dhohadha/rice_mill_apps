@@ -326,6 +326,78 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
+// Helper to calculate historical day stats on-the-fly (fallback for missing DailyUsage)
+async function calculateHistoricalDayStats(deviceId, date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  console.log(`🔍 Calculating on-the-fly stats for ${deviceId} on ${start.toDateString()}...`);
+
+  // 1. Basic Aggregation (Avg PF, Max/Min Values)
+  const stats = await MeterData.aggregate([
+    { $match: { deviceId, timestamp: { $gte: start, $lte: end } } },
+    { $group: {
+      _id: null,
+      avgPF: { $avg: "$PF" },
+      maxKVA: { $max: "$KVA" },
+      minKVA: { $min: { $cond: [{ $gt: ["$KVA", 0] }, "$KVA", 1000000] } },
+      maxKW: { $max: "$KW" },
+      minKW: { $min: { $cond: [{ $gt: ["$KW", 0] }, "$KW", 1000000] } },
+    }}
+  ]);
+
+  if (stats.length === 0) {
+    console.log(`⚠️ No MeterData found for ${deviceId} on ${start.toDateString()}`);
+    return null;
+  }
+
+  const s = stats[0];
+  if (s.minKVA === 1000000) s.minKVA = 0;
+  if (s.minKW === 1000000) s.minKW = 0;
+
+  // 2. Exact Timestamps for Extremes
+  const getExtreme = async (field, sortOrder) => {
+    return await MeterData.findOne({ deviceId, timestamp: { $gte: start, $lte: end }, [field]: { $gt: 0 } })
+      .sort({ [field]: sortOrder })
+      .lean();
+  };
+
+  const maxKVARec = await getExtreme('KVA', -1);
+  const minKVARec = await getExtreme('KVA', 1);
+  const maxKWRec = await getExtreme('KW', -1);
+  const minKWRec = await getExtreme('KW', 1);
+
+  // 3. Consumption (KWH Delta)
+  const minKwh = await MeterData.findOne({ deviceId, timestamp: { $gte: start, $lte: end }, KWH: { $gt: 0 } })
+    .sort({ KWH: 1 })
+    .lean();
+  const maxKwh = await MeterData.findOne({ deviceId, timestamp: { $gte: start, $lte: end } })
+    .sort({ KWH: -1 })
+    .lean();
+  
+  let consumption = 0;
+  if (minKwh && maxKwh) {
+    consumption = maxKwh.KWH - minKwh.KWH;
+    if (consumption < 0) consumption = maxKwh.KWH;
+  }
+
+  return {
+    totalKWh: consumption,
+    maxKVA: s.maxKVA || 0,
+    maxKVATime: maxKVARec ? maxKVARec.timestamp : null,
+    minKVA: s.minKVA || 0,
+    minKVATime: minKVARec ? minKVARec.timestamp : null,
+    maxKW: s.maxKW || 0,
+    maxKWTime: maxKWRec ? maxKWRec.timestamp : null,
+    minKW: s.minKW || 0,
+    minKWTime: minKWRec ? minKWRec.timestamp : null,
+    avgPF: s.avgPF || 0,
+    date: start
+  };
+}
+
 
 // Get latest meter status
 app.get('/api/status', async (req, res) => {
@@ -618,7 +690,13 @@ app.get('/api/analysis/historical-usage', async (req, res) => {
       } else {
         // Historical
         const record = await DailyUsage.findOne({ deviceId, date: targetDate });
-        kwh = record ? record.totalKWh : 0;
+        if (record) {
+          kwh = record.totalKWh;
+        } else {
+          // Fallback: If summary is missing but data is recent (within 2 days), calculate it
+          const fallback = await calculateHistoricalDayStats(deviceId, targetDate);
+          kwh = fallback ? fallback.totalKWh : 0;
+        }
       }
 
       // Only include day if data was recorded (kwh > 0) OR if it's Today (i === 0)
@@ -651,10 +729,29 @@ app.get('/api/analysis/period-stats', async (req, res) => {
     todayStart.setHours(0, 0, 0, 0);
 
     // 1. Get History from DailyUsage (up to yesterday)
-    const historicalUsages = await DailyUsage.find({
+    let historicalUsages = await DailyUsage.find({
       deviceId,
       date: { $gte: start, $lt: todayStart }
     }).lean();
+
+    // 1.1 Fallback logic: If we are looking for a specific day (like yesterday) 
+    // and it's missing from DailyUsage, calculate it from raw data.
+    if (historicalUsages.length === 0 && start < todayStart) {
+      // Calculate how many days we are looking for
+      const dayDiff = Math.ceil((todayStart - start) / (1000 * 60 * 60 * 24));
+      
+      // If it's a small range (last 2 days), we can afford to calculate it live
+      if (dayDiff <= 2) {
+        const fallbackData = [];
+        for (let i = 0; i < dayDiff; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const stats = await calculateHistoricalDayStats(deviceId, d);
+          if (stats) fallbackData.push(stats);
+        }
+        historicalUsages = fallbackData;
+      }
+    }
 
     // 2. Get Live Today from MeterData
     let todayStats = null;
@@ -812,10 +909,25 @@ app.get('/api/analysis/range-usage', async (req, res) => {
     todayStart.setHours(0, 0, 0, 0);
 
     // 1. Get archived totals for the range
-    const usages = await DailyUsage.find({
+    let usages = await DailyUsage.find({
       deviceId,
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // 1.1 Fallback: If no summaries found but range is recent, calculate consumption live
+    if (usages.length === 0 && end < todayStart) {
+      const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      if (dayDiff <= 3) {
+        const fallbackData = [];
+        for (let i = 0; i < dayDiff; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const stats = await calculateHistoricalDayStats(deviceId, d);
+          if (stats) fallbackData.push(stats);
+        }
+        usages = fallbackData;
+      }
+    }
 
     let totalConsumed = usages.reduce((sum, u) => sum + (u.totalKWh || 0), 0);
 

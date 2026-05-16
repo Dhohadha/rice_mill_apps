@@ -14,63 +14,33 @@ class RangeAnalysisScreen extends ConsumerStatefulWidget {
 }
 
 class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
-  DateTime? fromDate;
-  DateTime? toDate;
-  double? totalConsumed;
-  bool isLoadingRange = false;
   int monthOffset = 0; // 0 means starting from the latest 3 months
 
-  @override
-  void initState() {
-    super.initState();
-    // Default range: last 7 days
-    toDate = DateTime.now();
-    fromDate = toDate!.subtract(const Duration(days: 7));
-  }
-
-  Future<void> _checkUsage() async {
-    if (fromDate == null || toDate == null) return;
-    
-    setState(() {
-      isLoadingRange = true;
-      totalConsumed = null;
-    });
-
-    try {
-      final api = ref.read(apiServiceProvider);
-      final result = await api.getRangeUsage(widget.deviceId, fromDate!, toDate!);
-      setState(() {
-        totalConsumed = result;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-    } finally {
-      setState(() {
-        isLoadingRange = false;
-      });
-    }
-  }
-
   Future<void> _selectDate(BuildContext context, bool isFrom) async {
+    final DateTime currentFrom = ref.read(rangeFromDateProvider);
+    final DateTime currentTo = ref.read(rangeToDateProvider);
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: (isFrom ? fromDate : toDate) ?? DateTime.now(),
+      initialDate: isFrom ? currentFrom : currentTo,
       firstDate: DateTime(2023),
       lastDate: DateTime.now(),
     );
     if (picked != null) {
-      setState(() {
-        if (isFrom) {
-          fromDate = picked;
-        } else {
-          toDate = picked;
-        }
-      });
+      if (isFrom) {
+        ref.read(rangeFromDateProvider.notifier).setDate(picked);
+      } else {
+        ref.read(rangeToDateProvider.notifier).setDate(picked);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final fromDate = ref.watch(rangeFromDateProvider);
+    final toDate = ref.watch(rangeToDateProvider);
+    final rangeConsumption = ref.watch(customRangeConsumptionProvider(widget.deviceId));
+    final rangeStats = ref.watch(customRangeStatsProvider(widget.deviceId));
     final monthlyData = ref.watch(monthlyUsageProvider(widget.deviceId));
 
     return Scaffold(
@@ -87,13 +57,21 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildDateSelectors(),
-              const SizedBox(height: 20),
-              _buildCheckButton(),
-              if (totalConsumed != null || isLoadingRange) ...[
-                const SizedBox(height: 30),
-                _buildResultDisplay(),
-              ],
+              _buildDateSelectors(fromDate, toDate),
+              const SizedBox(height: 30),
+              
+              _buildResultDisplay(rangeConsumption),
+              const SizedBox(height: 30),
+
+              _buildSectionTitle("Historical Period Extremes"),
+              const SizedBox(height: 8),
+              Text(
+                "Peaks from ${DateFormat('MMM dd').format(fromDate)} to ${DateFormat('MMM dd').format(toDate)}",
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+              const SizedBox(height: 15),
+              _buildExtremeGrid(rangeStats),
+              
               const SizedBox(height: 40),
               _buildSectionTitle('Monthly Consumption (kWh)'),
               const SizedBox(height: 20),
@@ -112,7 +90,7 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
     );
   }
 
-  Widget _buildDateSelectors() {
+  Widget _buildDateSelectors(DateTime fromDate, DateTime toDate) {
     return Row(
       children: [
         Expanded(
@@ -132,7 +110,7 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
     );
   }
 
-  Widget _buildDateBox(String label, DateTime? date) {
+  Widget _buildDateBox(String label, DateTime date) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -146,7 +124,7 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
           Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
           const SizedBox(height: 4),
           Text(
-            date != null ? DateFormat('dd MMM yyyy').format(date) : "Select",
+            DateFormat('dd MMM yyyy').format(date),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
         ],
@@ -154,26 +132,15 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
     );
   }
 
-  Widget _buildCheckButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: isLoadingRange ? null : _checkUsage,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.teal,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          elevation: 0,
-        ),
-        child: isLoadingRange
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text("Check Consumption", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ),
+  Widget _buildResultDisplay(AsyncValue<double> consumed) {
+    return consumed.when(
+      loading: () => _buildResultContainer(null),
+      error: (e, _) => Center(child: Text("Error: $e")),
+      data: (val) => _buildResultContainer(val),
     );
   }
 
-  Widget _buildResultDisplay() {
+  Widget _buildResultContainer(double? val) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(25),
@@ -193,7 +160,7 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
           const Text("Units Consumed", style: TextStyle(color: Colors.white70, fontSize: 14)),
           const SizedBox(height: 10),
           Text(
-            totalConsumed != null ? totalConsumed!.toStringAsFixed(2) : "...",
+            val != null ? val.toStringAsFixed(2) : "...",
             style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold),
           ),
           const Text("kWh", style: TextStyle(color: Colors.white70, fontSize: 16)),
@@ -202,9 +169,81 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
     );
   }
 
+  Widget _buildExtremeGrid(AsyncValue<Map<String, dynamic>?> stats) {
+    return stats.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('Error loading stats')),
+      data: (data) {
+        final kva = data?['kva'] as Map<String, dynamic>? ?? {};
+        final kw = data?['kw'] as Map<String, dynamic>? ?? {};
+        
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _buildExtremeCard('MAX KVA', kva['max'] ?? 0.0, kva['maxTime'], Icons.trending_up, Colors.orange)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildExtremeCard('MIN KVA', kva['min'] ?? 0.0, kva['minTime'], Icons.trending_down, Colors.blue)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildExtremeCard('LIVE MAX KW', kw['max'] ?? 0.0, kw['maxTime'], Icons.speed, Colors.purple)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildExtremeCard('LIVE MIN KW', kw['min'] ?? 0.0, kw['minTime'], Icons.low_priority, Colors.indigo)),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildExtremeCard(String title, num value, String? timeStr, IconData icon, Color color) {
+    String formattedTime = "N/A";
+    if (timeStr != null) {
+      final time = DateTime.parse(timeStr).toLocal();
+      formattedTime = DateFormat('MMM dd, HH:mm').format(time);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 10),
+          Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(value.toStringAsFixed(1), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(
+            formattedTime,
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMonthlyGraph(AsyncValue<List<dynamic>> monthlyData) {
     return monthlyData.when(
-      loading: () => const SizedBox(height: 250),
+      loading: () => Container(
+        height: 250,
+        decoration: BoxDecoration(
+          color: Colors.teal.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: const Center(child: CircularProgressIndicator(color: Colors.teal)),
+      ),
       error: (err, _) => Center(child: Text("Error loading monthly data: $err")),
       data: (list) {
         if (list.isEmpty) return const Center(child: Text("No data available"));
@@ -245,25 +284,39 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
             const SizedBox(height: 20),
             Container(
               height: 250,
-              padding: const EdgeInsets.only(right: 20, top: 20),
+              padding: const EdgeInsets.only(left: 0, right: 30, top: 20, bottom: 10),
+              decoration: BoxDecoration(
+                color: Colors.teal.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
                   maxY: _getMaxY(window),
+                  barTouchData: BarTouchData(
+                    enabled: true,
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (_) => Colors.transparent,
+                      tooltipPadding: EdgeInsets.zero,
+                      tooltipMargin: 4,
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        return BarTooltipItem(
+                          rod.toY.toStringAsFixed(1),
+                          const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 10),
+                        );
+                      },
+                    ),
+                  ),
                   barGroups: window.asMap().entries.map((e) {
                     return BarChartGroupData(
                       x: e.key,
+                      showingTooltipIndicators: [0],
                       barRods: [
                         BarChartRodData(
                           toY: (e.value['totalKWh'] as num).toDouble(),
                           color: Colors.teal,
                           width: 25,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                          backDrawRodData: BackgroundBarChartRodData(
-                            show: true,
-                            toY: _getMaxY(window),
-                            color: Colors.grey.shade100,
-                          ),
                         )
                       ],
                     );
@@ -273,11 +326,19 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 35,
                         getTitlesWidget: (value, meta) {
                           int index = value.toInt();
                           if (index < 0 || index >= window.length) return const Text('');
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 10.0),
+                          return SideTitleWidget(
+                            meta: meta,
+                            space: 10,
+                            fitInside: SideTitleFitInsideData(
+                              enabled: true,
+                              distanceFromEdge: 0,
+                              axisPosition: meta.axisPosition,
+                              parentAxisSize: meta.parentAxisSize,
+                            ),
                             child: Text(
                               _getMonthName(window[index]['month']),
                               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
@@ -289,8 +350,15 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 9)),
+                        reservedSize: 35,
+                        getTitlesWidget: (value, meta) => SideTitleWidget(
+                          meta: meta,
+                          space: 4,
+                          child: Text(
+                            value.toInt().toString(),
+                            style: const TextStyle(fontSize: 9, color: Colors.black54),
+                          ),
+                        ),
                       ),
                     ),
                     rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -317,6 +385,6 @@ class _RangeAnalysisScreenState extends ConsumerState<RangeAnalysisScreen> {
     for (var d in data) {
       if ((d['totalKWh'] as num) > max) max = (d['totalKWh'] as num).toDouble();
     }
-    return max == 0 ? 100 : max * 1.2;
+    return max == 0 ? 100 : max * 1.3;
   }
 }

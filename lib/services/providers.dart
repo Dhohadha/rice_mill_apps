@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_settings.dart';
@@ -17,10 +18,32 @@ final authServiceProvider = Provider((ref) => AuthService());
 final notificationServiceProvider = Provider((ref) => NotificationService());
 final alarmServiceProvider = Provider((ref) => AlarmService());
 
-final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  final api = ref.watch(apiServiceProvider);
-  return await api.syncUser();
+final authStateProvider = StreamProvider<User?>((ref) {
+  return ref.watch(authServiceProvider).authStateChanges;
 });
+
+final userProfileProvider = AsyncNotifierProvider<UserProfileNotifier, Map<String, dynamic>?>(() {
+  return UserProfileNotifier();
+});
+
+class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
+  @override
+  FutureOr<Map<String, dynamic>?> build() async {
+    ref.keepAlive();
+    final api = ref.watch(apiServiceProvider);
+    return await api.syncUser();
+  }
+
+  Future<void> refreshProfileQuietly() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final newData = await api.syncUser();
+      state = AsyncData(newData);
+    } catch (e) {
+      // Keep old state on error
+    }
+  }
+}
 
 // Settings Provider
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings?>(() {
@@ -58,6 +81,7 @@ class SettingsNotifier extends Notifier<AppSettings?> {
 
 // MQTT Data Provider (Family)
 final mqttDataProvider = StreamProvider.family<MeterData, String>((ref, deviceId) async* {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final socketService = ref.watch(socketServiceProvider);
   
@@ -89,8 +113,28 @@ class SelectedDateNotifier extends Notifier<DateTime> {
   void setDate(DateTime date) => state = date;
 }
 
+// Range Analysis Dates
+final rangeFromDateProvider = NotifierProvider<RangeDateNotifier, DateTime>(() {
+  return RangeDateNotifier(defaultDays: 7);
+});
+
+final rangeToDateProvider = NotifierProvider<RangeDateNotifier, DateTime>(() {
+  return RangeDateNotifier(defaultDays: 0);
+});
+
+class RangeDateNotifier extends Notifier<DateTime> {
+  final int defaultDays;
+  RangeDateNotifier({required this.defaultDays});
+
+  @override
+  DateTime build() => DateTime.now().subtract(Duration(days: defaultDays));
+  
+  void setDate(DateTime date) => state = date;
+}
+
 // Consumed KWH Provider (Family)
 final consumedKwhProvider = FutureProvider.family<double, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final date = ref.watch(selectedDateProvider);
   final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -99,18 +143,21 @@ final consumedKwhProvider = FutureProvider.family<double, String>((ref, deviceId
 
 // Today's KWH Provider (Family) - Midnight to Now
 final todayKwhProvider = FutureProvider.family<double, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   return await api.getTodayUsage(deviceId);
 });
 
 // Analysis: Historical Usage Provider (up to 50 days)
 final historicalUsageProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   return await api.getHistoricalUsage(deviceId, days: 50);
 });
 
 // Analysis: Period Stats Provider
 final periodStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final fromDate = ref.watch(selectedDateProvider);
   return await api.getPeriodStats(deviceId, fromDate);
@@ -118,6 +165,7 @@ final periodStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>
 
 // Analysis: Today's Period Stats Provider (Fixed to Today's Midnight)
 final todayPeriodStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final todayMidnight = DateTime.now().copyWith(hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0);
   return await api.getPeriodStats(deviceId, todayMidnight);
@@ -125,6 +173,7 @@ final todayPeriodStatsProvider = FutureProvider.family<Map<String, dynamic>?, St
 
 // Analysis: Mixed Stats Provider
 final mixedStatsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final profile = ref.watch(userProfileProvider).value;
   if (profile == null) return null;
@@ -153,6 +202,7 @@ class IsDayGraphNotifier extends Notifier<bool> {
 
 // Graph Data Provider (Family)
 final graphDataProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final isDay = ref.watch(isDayGraphProvider);
   return await api.getHistory(isDay ? 'day' : 'hour', deviceId);
@@ -160,6 +210,7 @@ final graphDataProvider = FutureProvider.family<List<dynamic>, String>((ref, dev
 
 // Analysis: Monthly Usage Provider
 final monthlyUsageProvider = FutureProvider.family<List<dynamic>, String>((ref, deviceId) async {
+  ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   return await api.getMonthlyUsage(deviceId);
 });
@@ -169,6 +220,7 @@ final focusedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
 
 // Stats for a specific day (midnight to midnight)
 final dailyStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, deviceId) async {
+  ref.keepAlive();
   final focusedDate = ref.watch(focusedDateProvider);
   final api = ref.watch(apiServiceProvider);
   final from = DateTime(focusedDate.year, focusedDate.month, focusedDate.day);
@@ -178,6 +230,7 @@ final dailyStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>(
 
 // Consumption for a specific day
 final dailyConsumptionProvider = FutureProvider.family<double, String>((ref, deviceId) async {
+  ref.keepAlive();
   final focusedDate = ref.watch(focusedDateProvider);
   final api = ref.watch(apiServiceProvider);
   final from = DateTime(focusedDate.year, focusedDate.month, focusedDate.day);
@@ -189,6 +242,24 @@ final dailyConsumptionProvider = FutureProvider.family<double, String>((ref, dev
   return await api.getRangeUsage(deviceId, from, from);
 });
 
+// Custom Range Stats Provider
+final customRangeStatsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, deviceId) async {
+  ref.keepAlive();
+  final from = ref.watch(rangeFromDateProvider);
+  final to = ref.watch(rangeToDateProvider);
+  final api = ref.watch(apiServiceProvider);
+  return await api.getPeriodStats(deviceId, from, toDate: to);
+});
+
+// Custom Range Consumption Provider
+final customRangeConsumptionProvider = FutureProvider.family<double, String>((ref, deviceId) async {
+  ref.keepAlive();
+  final from = ref.watch(rangeFromDateProvider);
+  final to = ref.watch(rangeToDateProvider);
+  final api = ref.watch(apiServiceProvider);
+  return await api.getRangeUsage(deviceId, from, to);
+});
+
 // Notifications Provider using AsyncNotifier
 final notificationsProvider = AsyncNotifierProvider<NotificationsNotifier, List<dynamic>>(() {
   return NotificationsNotifier();
@@ -197,6 +268,7 @@ final notificationsProvider = AsyncNotifierProvider<NotificationsNotifier, List<
 class NotificationsNotifier extends AsyncNotifier<List<dynamic>> {
   @override
   FutureOr<List<dynamic>> build() async {
+    ref.keepAlive();
     final api = ref.watch(apiServiceProvider);
     return await api.getNotifications();
   }

@@ -6,10 +6,10 @@ class ApiService {
   static const String _envIP = String.fromEnvironment('API_IP', defaultValue: _defaultIP);
 
   static String get baseUrl {
-    if (kIsWeb) return 'http://13.233.76.8:8000';
+    if (kIsWeb) return 'http://$_envIP:8000';
     try {
       if (Platform.isAndroid || Platform.isIOS) {
-        return 'http://13.233.76.8:8000';
+        return 'http://$_envIP:8000';
       }
     } catch (_) {}
     return 'http://localhost:8000';

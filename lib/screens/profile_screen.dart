@@ -69,7 +69,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 30),
 
             // Settings List
-            if (userProfile.value?['role'] != 'Guest') ...[
+            if (userProfile.value?['role'] != 'Guest' && userProfile.value?['isSharedUser'] != true) ...[
               if ((userProfile.value?['assignedDevices'] as List<dynamic>? ?? []).length > 1)
                 _buildSettingTile(
                   icon: Icons.analytics_outlined,
@@ -97,19 +97,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               },
             ),
             
-            if (userProfile.value?['role'] == 'Guest') ...[
-              const SizedBox(height: 30),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Monitored Devices',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                ),
-              ),
-              const SizedBox(height: 10),
-              ...(userProfile.value?['assignedDevices'] as List<dynamic>? ?? []).map((id) => _buildDeviceItem(id)),
-            ],
-            
+
             // Pending Invitations Section
             if ((userProfile.value?['pendingInvitations'] as List<dynamic>? ?? []).isNotEmpty) ...[
               const SizedBox(height: 30),
@@ -231,7 +219,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   setState(() => _processingInvites.add(ownerEmail));
                   try {
                     final success = await ref.read(apiServiceProvider).declineInvitation(ownerEmail);
-                    if (success) ref.invalidate(userProfileProvider);
+                    if (success) ref.read(userProfileProvider.notifier).refreshProfileQuietly();
                   } finally {
                     if (mounted) setState(() => _processingInvites.remove(ownerEmail));
                   }
@@ -244,7 +232,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   setState(() => _processingInvites.add(ownerEmail));
                   try {
                     final success = await ref.read(apiServiceProvider).acceptInvitation(ownerEmail);
-                    if (success) ref.invalidate(userProfileProvider);
+                    if (success) ref.read(userProfileProvider.notifier).refreshProfileQuietly();
                   } finally {
                     if (mounted) setState(() => _processingInvites.remove(ownerEmail));
                   }
@@ -261,36 +249,5 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildDeviceItem(String deviceId) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.developer_board, color: Colors.teal),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Text(
-              deviceId,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            onPressed: () async {
-              final success = await ref.read(apiServiceProvider).removeGuestDevice(deviceId);
-              if (success) {
-                ref.invalidate(userProfileProvider);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
+
 }

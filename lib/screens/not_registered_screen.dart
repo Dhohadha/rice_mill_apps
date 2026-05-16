@@ -67,19 +67,7 @@ class NotRegisteredScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              onPressed: () {
-                ref.invalidate(userProfileProvider);
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Check again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(200, 50),
-              ),
-            ),
+
             const SizedBox(height: 20),
             TextButton.icon(
               onPressed: () {

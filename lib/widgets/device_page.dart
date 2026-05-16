@@ -77,6 +77,7 @@ class DevicePage extends ConsumerWidget {
     final userProfile = ref.watch(userProfileProvider);
 
     return mqttData.when(
+      skipLoadingOnReload: true,
       loading: () => const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -400,8 +401,8 @@ class DevicePage extends ConsumerWidget {
                       if (data.isEmpty) return const Center(child: Text('No history data available'));
                       
                       if (isDayGraph) {
-                        // For the 24-hour graph, make it extremely compact (10px per point)
-                        double chartWidth = data.length * 10.0;
+                        // For the 24-hour graph, make it compact (4px per point)
+                        double chartWidth = data.length * 4.0;
                         double minWidth = MediaQuery.of(context).size.width - 32 - 40; // Subtract axis width
 
                         return Row(
@@ -416,8 +417,9 @@ class DevicePage extends ConsumerWidget {
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 reverse: true,
-                                child: SizedBox(
+                                child: Container(
                                   width: chartWidth < minWidth ? minWidth : chartWidth,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
                                   child: LineChart(_buildChartData(data, settings, isDayGraph, showLeftTitles: false)),
                                 ),
                               ),
@@ -430,7 +432,7 @@ class DevicePage extends ConsumerWidget {
                       }
                     },
                     error: (e, _) => Center(child: Text('Error: $e')),
-                    loading: () => const SizedBox.shrink(),
+                    loading: () => const Center(child: CircularProgressIndicator(color: Colors.teal)),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -669,6 +671,7 @@ class DevicePage extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: showLeftTitles,
             reservedSize: 40,
+            interval: 50, // Force labels at 50, 100, 150, etc.
             getTitlesWidget: (value, meta) => SideTitleWidget(
               meta: meta,
               child: Text(
@@ -686,7 +689,7 @@ class DevicePage extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: isDayGraph,
             reservedSize: 30,
-            interval: 6, // 6 hours gap for the ultra-compact Day graph
+            interval: 1,
             getTitlesWidget: (value, meta) {
               int index = value.toInt();
               if (index < 0 || index >= data.length) return const Text('');
@@ -695,11 +698,33 @@ class DevicePage extends ConsumerWidget {
               if (timestamp == null) return const Text('');
               final date = DateTime.parse(timestamp).toLocal();
 
-              String label = DateFormat('HH:mm').format(date);
+              bool isHourTransition = false;
+              if (index > 0) {
+                final prevTimestamp = data[index - 1]['timestamp'];
+                if (prevTimestamp != null) {
+                  final prevDate = DateTime.parse(prevTimestamp).toLocal();
+                  // Show label at 4-hour intervals (00:00, 04:00, 08:00, etc.)
+                  if (date.hour != prevDate.hour && date.hour % 4 == 0) {
+                    isHourTransition = true;
+                  }
+                }
+              }
+
+              // Only show label if it's an appropriate 4-hour marker
+              if (!isHourTransition) return const Text('');
+
+              // Use HH:00 for hourly transitions
+              String label = "${date.hour.toString().padLeft(2, '0')}:00";
 
               return SideTitleWidget(
                 meta: meta,
                 space: 8,
+                fitInside: SideTitleFitInsideData(
+                  enabled: true,
+                  distanceFromEdge: 0,
+                  axisPosition: meta.axisPosition,
+                  parentAxisSize: meta.parentAxisSize,
+                ),
                 child: Text(
                   label,
                   style: const TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold),

@@ -13,7 +13,6 @@ class AnalysisScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sevenDayData = ref.watch(historicalUsageProvider(deviceId));
-    final periodStats = ref.watch(periodStatsProvider(deviceId));
     final focusedDate = ref.watch(focusedDateProvider);
     final dailyData = ref.watch(dailyConsumptionProvider(deviceId));
     final dailyStats = ref.watch(dailyStatsProvider(deviceId));
@@ -51,16 +50,6 @@ class AnalysisScreen extends ConsumerWidget {
               Text(isToday ? "Max/Min values recorded since midnight" : "Max/Min values recorded on this day", style: const TextStyle(fontSize: 11, color: Colors.grey)),
               const SizedBox(height: 15),
               _buildExtremeGrid(dailyStats),
-              const SizedBox(height: 30),
-
-              _buildSectionTitle("Historical Period Extremes"),
-              const SizedBox(height: 8),
-              Text(
-                "Peaks from ${DateFormat('MMM dd').format(ref.watch(selectedDateProvider))} to Now",
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-              const SizedBox(height: 15),
-              _buildExtremeGrid(periodStats),
               const SizedBox(height: 30),
             ],
           ),
@@ -107,25 +96,25 @@ class AnalysisScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(24),
       ),
       child: data.when(
-        loading: () => const SizedBox(height: 250), // Keep height but hide spinner
+        loading: () => const Center(child: CircularProgressIndicator(color: Colors.teal)),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (list) {
           if (list.isEmpty) return const Center(child: Text('No historical data available'));
           
           double maxVal = list.map((e) => (e['kwh'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+          double avgVal = list.map((e) => (e['kwh'] as num).toDouble()).reduce((a, b) => a + b) / list.length;
           double maxY = maxVal > 10 ? maxVal * 1.3 : 10.0;
           
-          // Calculate dynamic width based on number of bars (55 pixels per bar)
           final double barWidth = 55.0;
           final double chartWidth = list.length * barWidth;
           final double minWidth = MediaQuery.of(ref.context).size.width - 40;
 
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            reverse: true, // Show the most recent data (right side) first
+            reverse: true,
             child: Container(
               width: chartWidth < minWidth ? minWidth : chartWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -155,17 +144,22 @@ class AnalysisScreen extends ConsumerWidget {
                   ),
                   barGroups: list.asMap().entries.map((e) {
                     final date = DateTime.parse(e.value['fullDate']).toLocal();
+                    final val = (e.value['kwh'] as num).toDouble();
                     final isSelected = date.year == focusedDate.year && date.month == focusedDate.month && date.day == focusedDate.day;
+                    final isHigh = val >= avgVal;
 
                     return BarChartGroupData(
                       x: e.key,
                       showingTooltipIndicators: [0],
                       barRods: [
                         BarChartRodData(
-                          toY: (e.value['kwh'] as num).toDouble(),
-                          color: isSelected ? Colors.orange : Colors.teal,
+                          toY: val,
+                          color: isHigh ? Colors.orange : Colors.green,
                           width: 16,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          borderSide: isSelected 
+                            ? const BorderSide(color: Color.fromARGB(255, 137, 194, 240), width: 2) 
+                            : BorderSide.none,
                         )
                       ],
                     );
@@ -179,9 +173,19 @@ class AnalysisScreen extends ConsumerWidget {
                           int index = value.toInt();
                           if (index < 0 || index >= list.length) return const Text('');
                           final date = DateTime.parse(list[index]['fullDate']).toLocal();
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(DateFormat('dd/MM').format(date), style: const TextStyle(fontSize: 10)),
+                          return SideTitleWidget(
+                            meta: meta,
+                            space: 8,
+                            fitInside: SideTitleFitInsideData(
+                              enabled: true,
+                              distanceFromEdge: 0,
+                              axisPosition: meta.axisPosition,
+                              parentAxisSize: meta.parentAxisSize,
+                            ),
+                            child: Text(
+                              DateFormat('dd/MM').format(date),
+                              style: const TextStyle(fontSize: 10),
+                            ),
                           );
                         },
                       ),
@@ -253,24 +257,24 @@ class AnalysisScreen extends ConsumerWidget {
 
   Widget _buildExtremeGrid(AsyncValue<Map<String, dynamic>?> stats) {
     final data = stats.valueOrNull;
-    final kva = data?['kva'] ?? {'max': 0.0, 'min': 0.0, 'maxTime': null, 'minTime': null};
-    final kw = data?['kw'] ?? {'max': 0.0, 'min': 0.0, 'maxTime': null, 'minTime': null};
+    final kva = data?['kva'] as Map<String, dynamic>? ?? {};
+    final kw = data?['kw'] as Map<String, dynamic>? ?? {};
     
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildExtremeCard('MAX KVA', kva['max'], kva['maxTime'], Icons.trending_up, Colors.orange)),
+            Expanded(child: _buildExtremeCard('MAX KVA', kva['max'] ?? 0.0, kva['maxTime'], Icons.trending_up, Colors.orange)),
             const SizedBox(width: 16),
-            Expanded(child: _buildExtremeCard('MIN KVA', kva['min'], kva['minTime'], Icons.trending_down, Colors.blue)),
+            Expanded(child: _buildExtremeCard('MIN KVA', kva['min'] ?? 0.0, kva['minTime'], Icons.trending_down, Colors.blue)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildExtremeCard('LIVE MAX KW', kw['max'], kw['maxTime'], Icons.speed, Colors.purple)),
+            Expanded(child: _buildExtremeCard('LIVE MAX KW', kw['max'] ?? 0.0, kw['maxTime'], Icons.speed, Colors.purple)),
             const SizedBox(width: 16),
-            Expanded(child: _buildExtremeCard('LIVE MIN KW', kw['min'], kw['minTime'], Icons.low_priority, Colors.indigo)),
+            Expanded(child: _buildExtremeCard('LIVE MIN KW', kw['min'] ?? 0.0, kw['minTime'], Icons.low_priority, Colors.indigo)),
           ],
         ),
       ],
@@ -280,7 +284,7 @@ class AnalysisScreen extends ConsumerWidget {
   Widget _buildExtremeCard(String title, num value, String? timeStr, IconData icon, Color color) {
     String formattedTime = "N/A";
     if (timeStr != null) {
-      final time = DateTime.parse(timeStr);
+      final time = DateTime.parse(timeStr).toLocal();
       formattedTime = DateFormat('MMM dd, HH:mm').format(time);
     }
 

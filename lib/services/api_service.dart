@@ -186,6 +186,33 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> verifyEmailToShare(String emailToShare) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/users/verify-email'),
+        headers: await _getHeaders(),
+        body: jsonEncode({'emailToShare': emailToShare}),
+      );
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error verifying email: $e');
+      return {'status': 'error', 'message': 'Network error. Please try again.'};
+    }
+  }
+
+  Future<bool> revokeAccess(String sharedEmail) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/users/revoke-access/${Uri.encodeComponent(sharedEmail)}'),
+        headers: await _getHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Error revoking access: $e');
+      return false;
+    }
+  }
+
   Future<bool> shareAccess(String emailToShare, List<String> deviceIds) async {
     try {
       final response = await http.post(
@@ -268,32 +295,6 @@ class ApiService {
     return null;
   }
 
-  Future<bool> addGuestDevice(String deviceId) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/users/add-guest-device'),
-        headers: await _getHeaders(),
-        body: jsonEncode({'deviceId': deviceId}),
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('Error adding guest device: $e');
-      return false;
-    }
-  }
-
-  Future<bool> removeGuestDevice(String deviceId) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/api/users/remove-guest-device/$deviceId'),
-        headers: await _getHeaders(),
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('Error removing guest device: $e');
-      return false;
-    }
-  }
 
   Future<bool> acceptInvitation(String ownerEmail) async {
     try {

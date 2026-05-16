@@ -19,12 +19,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   String body = message.data['body'] ?? 'Limit exceeded';
   String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-  await notificationService.showThresholdAlert(
-    id: 999, // New unified ID
-    title: title,
-    body: body,
-    payload: alertId,
-  );
+  if (alertId == 'INVITE') {
+    await notificationService.showNormalNotification(
+      id: message.hashCode,
+      title: title,
+      body: body,
+      payload: alertId,
+    );
+  } else {
+    await notificationService.showThresholdAlert(
+      id: 999, // New unified ID
+      title: title,
+      body: body,
+      payload: alertId,
+    );
+  }
 }
 
 class FCMService {
@@ -62,15 +71,24 @@ class FCMService {
       String body = message.data['body'] ?? 'Limit exceeded';
       String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-      _notificationService.showThresholdAlert(
-        id: message.hashCode,
-        title: title,
-        body: body,
-        payload: alertId,
-      );
+      if (alertId == 'INVITE') {
+        _notificationService.showNormalNotification(
+          id: message.hashCode,
+          title: title,
+          body: body,
+          payload: alertId,
+        );
+      } else {
+        _notificationService.showThresholdAlert(
+          id: message.hashCode,
+          title: title,
+          body: body,
+          payload: alertId,
+        );
 
-      // Play the loud alarm sound explicitly for foreground alerts
-      AlarmService().playAlarm();
+        // Play the loud alarm sound explicitly for foreground alerts only if not an invite
+        AlarmService().playAlarm();
+      }
     });
 
     // App opened from background/terminated via notification

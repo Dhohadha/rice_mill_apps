@@ -105,7 +105,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 try {
                   final success = await ref.read(apiServiceProvider).declineInvitation(invite['ownerEmail']);
                   if (success) {
-                    ref.invalidate(userProfileProvider);
+                    ref.read(userProfileProvider.notifier).refreshProfileQuietly();
                     if (context.mounted) Navigator.pop(context);
                   }
                 } finally {
@@ -120,7 +120,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 try {
                   final success = await ref.read(apiServiceProvider).acceptInvitation(invite['ownerEmail']);
                   if (success) {
-                    ref.invalidate(userProfileProvider);
+                    ref.read(userProfileProvider.notifier).refreshProfileQuietly();
                     if (context.mounted) Navigator.pop(context);
                   }
                 } finally {

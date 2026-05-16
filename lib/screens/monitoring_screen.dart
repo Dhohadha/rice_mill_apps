@@ -4,7 +4,6 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../services/providers.dart';
 import '../widgets/device_page.dart';
 import 'notifications_screen.dart';
-import 'guest_screen.dart';
 
 class MonitoringScreen extends ConsumerStatefulWidget {
   const MonitoringScreen({super.key});
@@ -27,6 +26,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     final userProfile = ref.watch(userProfileProvider);
 
     return userProfile.when(
+      skipLoadingOnReload: true,
       loading: () => Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
@@ -47,39 +47,13 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                 baseMillName,
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18),
               ),
-              if (profile?['role'] == 'Guest')
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.orange, width: 0.5),
-                  ),
-                  child: const Text(
-                    'GUEST MODE',
-                    style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
             ],
           ),
           centerTitle: true,
           backgroundColor: Colors.white,
           elevation: 0,
           actions: [
-            if (profile?['role'] == 'Guest')
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline, color: Colors.teal, size: 28),
-                onPressed: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (context) => Padding(
-                      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-                      child: const GuestScreen(),
-                    ),
-                  );
-                },
-              ),
+
             IconButton(
               icon: const Icon(Icons.notifications_none, color: Colors.blue, size: 28),
               onPressed: () {

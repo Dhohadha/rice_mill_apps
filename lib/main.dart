@@ -10,7 +10,7 @@ import 'screens/main_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/not_registered_screen.dart';
-import 'screens/guest_screen.dart';
+import 'screens/access_revoked_screen.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/providers.dart';
@@ -96,7 +96,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         await prefs.setBool('isAlarmStopped', false);
       }
 
-      ref.invalidate(userProfileProvider);
+      ref.read(userProfileProvider.notifier).refreshProfileQuietly();
     }
   }
 
@@ -117,41 +117,91 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
       home: Consumer(
         builder: (context, ref, child) {
-          final authState = ref.watch(authServiceProvider).authStateChanges;
+          final authState = ref.watch(authStateProvider);
           
-          return StreamBuilder(
-            stream: authState,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(body: Center(child: CircularProgressIndicator()));
-              }
-              
-              if (snapshot.hasData) {
+          return authState.when(
+            skipLoadingOnReload: true,
+            skipLoadingOnRefresh: true,
+            loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+            error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+            data: (user) {
+              if (user != null) {
                 return Consumer(
                   builder: (context, ref, child) {
                     final userProfile = ref.watch(userProfileProvider);
                     
                     return userProfile.when(
+                      skipLoadingOnReload: true,
+                      skipLoadingOnRefresh: true,
                       data: (profile) {
-                        if (profile == null) return const NotRegisteredScreen();
+                        // Null means server returned a non-200 error (timeout/down)
+                        if (profile == null) {
+                          return Scaffold(
+                            backgroundColor: Colors.white,
+                            body: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(32),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.cloud_off, size: 64, color: Colors.grey),
+                                    const SizedBox(height: 20),
+                                    const Text('Could not connect to server', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    const Text('Please check your network and try again.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                                    const SizedBox(height: 32),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Access was revoked by the owner
+                        if (profile['accessRevoked'] == true) {
+                          return AccessRevokedScreen(revokedBy: profile['revokedBy'] as String?);
+                        }
                         
                         final role = profile['role'];
                         final devices = profile['assignedDevices'] as List<dynamic>? ?? [];
                         final invites = profile['pendingInvitations'] as List<dynamic>? ?? [];
 
                         if (role == 'Guest' && devices.isEmpty && invites.isEmpty) {
-                          return const GuestScreen();
+                          return const NotRegisteredScreen();
                         }
 
                         return const MainScreen();
                       },
                       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-                      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+                      error: (err, _) {
+                        // 403 = not registered in the admin system
+                        if (err.toString().contains('403')) {
+                          return const NotRegisteredScreen();
+                        }
+                        return Scaffold(
+                          backgroundColor: Colors.white,
+                          body: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_off, size: 64, color: Colors.grey),
+                                  const SizedBox(height: 20),
+                                  const Text('Connection Error', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  Text(err.toString(), textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                  const SizedBox(height: 32),
+                                  ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
               }
-              
               return const LoginScreen();
             },
           );

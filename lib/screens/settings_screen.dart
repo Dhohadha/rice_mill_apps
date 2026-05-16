@@ -76,18 +76,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             const SizedBox(height: 40),
             ElevatedButton(
-              onPressed: _isSaving ? null : () {
+              onPressed: _isSaving ? null : () async {
                 final double? newLimit = double.tryParse(_limitController.text);
                 final double? newMaxGauge = widget.type != 'PF' 
                     ? double.tryParse(_maxGaugeController.text) 
                     : null;
 
                 if (newLimit != null) {
-                  setState(() => _isSaving = true);
-                  Navigator.pop(context, {
-                    'limit': newLimit,
-                    'maxGauge': newMaxGauge,
-                  });
+                  // Check if values actually changed
+                  final bool limitChanged = newLimit != widget.currentLimit;
+                  final bool maxGaugeChanged = widget.type != 'PF' && newMaxGauge != widget.currentMaxGauge;
+
+                  if (!limitChanged && !maxGaugeChanged) {
+                    Navigator.pop(context); // Close without doing anything
+                    return;
+                  }
+
+                  // Show Confirmation Dialog
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Confirm Change'),
+                      content: Text('Are you sure you want to change the ${widget.type} settings?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('CANCEL'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('YES, CHANGE', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ) ?? false;
+
+                  if (confirmed) {
+                    if (mounted) {
+                      setState(() => _isSaving = true);
+                      Navigator.pop(context, {
+                        'limit': newLimit,
+                        'maxGauge': newMaxGauge,
+                      });
+                    }
+                  }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Please enter a valid numeric value')),
