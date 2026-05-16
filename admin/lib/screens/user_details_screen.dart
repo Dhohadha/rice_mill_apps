@@ -74,6 +74,9 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
         body: json.encode({'sharedEmail': email}),
       );
       if (response.statusCode == 200) {
+        setState(() {
+          _user = json.decode(response.body)['owner'];
+        });
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access shared successfully')));
       } else {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${response.body}')));
@@ -373,8 +376,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
   }
 
   Widget _buildSharedWithList() {
-    final sharedWith = _user['sharedWith'] as List<dynamic>? ?? [];
-    if (sharedWith.isEmpty) return const SizedBox.shrink();
+    final subUsers = _user['subUsers'] as List<dynamic>? ?? [];
+    if (subUsers.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,32 +387,68 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
         ),
         const SizedBox(height: 10),
-        ...sharedWith.map((email) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.person_outline, size: 20, color: Colors.teal),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      email,
-                      style: const TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
+        ...subUsers.map((subUser) {
+          final email = subUser['email'] ?? 'N/A';
+          final name = subUser['name'] ?? 'Pending Registration';
+          final isRevoked = subUser['accessRevoked'] == true;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: isRevoked ? Colors.red.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: isRevoked ? Border.all(color: Colors.red.withValues(alpha: 0.2)) : null,
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: isRevoked ? Colors.red.shade100 : Colors.teal.shade50,
+                  child: Icon(
+                    isRevoked ? Icons.block : Icons.person_outline, 
+                    size: 18, 
+                    color: isRevoked ? Colors.red : Colors.teal
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.cancel_outlined, size: 20, color: Colors.redAccent),
-                    onPressed: () => _revokeAccess(email),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isRevoked ? Colors.red : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        email,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      if (isRevoked)
+                        const Text(
+                          'ACCESS REVOKED',
+                          style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.cancel_outlined, 
+                    size: 20, 
+                    color: isRevoked ? Colors.grey : Colors.redAccent
+                  ),
+                  onPressed: isRevoked ? null : () => _revokeAccess(email),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }

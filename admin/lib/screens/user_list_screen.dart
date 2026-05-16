@@ -139,22 +139,31 @@ class _UserListScreenState extends State<UserListScreen> {
         title: Row(
           children: [
             Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold))),
-            if (user['isSharedUser'] == true)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-                ),
-                child: const Text(
-                  'SHARED',
-                  style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold),
-                ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.teal.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.teal.withValues(alpha: 0.5)),
+              ),
+              child: const Text(
+                'MAIN USER',
+                style: TextStyle(fontSize: 10, color: Colors.teal, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Device ID: $deviceId'),
+            if (user['subUsers'] != null && (user['subUsers'] as List).isNotEmpty)
+              Text(
+                '${(user['subUsers'] as List).length} Shared Users',
+                style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600),
               ),
           ],
         ),
-        subtitle: Text('Device ID: $deviceId'),
         trailing: const Icon(
           Icons.arrow_forward_ios,
           size: 16,

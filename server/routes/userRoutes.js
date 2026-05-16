@@ -59,6 +59,17 @@ router.post('/sync', verifyToken, async (req, res) => {
   }
 });
 
+// Helper to get hierarchical user data
+async function getHierarchicalUser(email) {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) return null;
+  const userObj = user.toObject();
+  if (!user.isSharedUser) {
+    userObj.subUsers = await User.find({ mainUserEmail: user.email });
+  }
+  return userObj;
+}
+
 // Admin Route: Register a new user
 router.post('/register', async (req, res) => {
   try {
@@ -67,36 +78,46 @@ router.post('/register', async (req, res) => {
     
     let user = await User.findOne({ email: normalizedEmail });
     if (user) {
-      user.name = name;
-      user.phone = phone;
-      user.role = 'User'; // Upgrade Guest to User if Admin registers them
-      if (millName) user.millName = millName;
-      if (deviceId && !user.assignedDevices.includes(deviceId)) {
-        user.assignedDevices.push(deviceId);
-      }
-    } else {
-      user = new User({
-        uid: normalizedEmail, // Temporary UID
-        name,
-        phone,
-        email: normalizedEmail,
-        role: 'User',
-        millName: millName || 'Rice Mill',
-        assignedDevices: deviceId ? [deviceId] : []
-      });
+      return res.status(400).json({ message: 'A user with this email already exists in the system.' });
     }
+
+    user = new User({
+      uid: normalizedEmail, // Temporary UID until they sign in
+      name,
+      phone,
+      email: normalizedEmail,
+      role: 'User',
+      millName: millName || 'Rice Mill',
+      assignedDevices: deviceId ? [deviceId] : []
+    });
     await user.save();
-    res.status(201).json({ message: 'User registered successfully', user });
+    
+    const updatedUser = await getHierarchicalUser(normalizedEmail);
+    res.status(201).json({ message: 'User registered successfully', user: updatedUser });
   } catch (error) {
     res.status(500).json({ message: 'Error registering user' });
   }
 });
 
-// Admin Route: Get all users
+// Admin Route: Get hierarchical user data (Owners and their Shared Users)
 router.get('/', async (req, res) => {
   try {
-    const users = await User.find();
-    res.json(users);
+    // 1. Fetch all users
+    const allUsers = await User.find();
+    
+    // 2. Separate into Owners and Shared Users
+    // An owner is anyone who is NOT a shared user and has at least one device (or is an Admin)
+    const owners = allUsers.filter(u => !u.isSharedUser && u.role !== 'Guest');
+    const sharedUsers = allUsers.filter(u => u.isSharedUser);
+
+    // 3. Nest Shared Users under their respective Owners
+    const hierarchicalData = owners.map(owner => {
+      const ownerObj = owner.toObject();
+      ownerObj.subUsers = sharedUsers.filter(u => u.mainUserEmail === owner.email);
+      return ownerObj;
+    });
+
+    res.json(hierarchicalData);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -114,7 +135,8 @@ router.post('/:email/devices', async (req, res) => {
       user.assignedDevices.push(deviceId);
       await user.save();
     }
-    res.json({ message: 'Device added successfully', user });
+    const updatedUser = await getHierarchicalUser(email);
+    res.json({ message: 'Device added successfully', user: updatedUser });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -129,7 +151,8 @@ router.delete('/:email/devices/:deviceId', async (req, res) => {
 
     user.assignedDevices = user.assignedDevices.filter(id => id !== deviceId);
     await user.save();
-    res.json({ message: 'Device removed successfully', user });
+    const updatedUser = await getHierarchicalUser(email);
+    res.json({ message: 'Device removed successfully', user: updatedUser });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -167,7 +190,8 @@ router.post('/:email/share', async (req, res) => {
       owner.sharedWith.push(sharedEmail.toLowerCase());
       await owner.save();
     }
-    res.json({ message: 'Access shared successfully', sharedUser });
+    const updatedOwner = await getHierarchicalUser(email);
+    res.json({ message: 'Access shared successfully', sharedUser, owner: updatedOwner });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -198,7 +222,8 @@ router.delete('/:email/share/:sharedEmail', async (req, res) => {
     owner.sharedWith = owner.sharedWith.filter(e => e !== sharedEmail.toLowerCase());
     await owner.save();
 
-    res.json({ message: 'Access revoked successfully', owner });
+    const updatedOwner = await getHierarchicalUser(email);
+    res.json({ message: 'Access revoked successfully', owner: updatedOwner });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -254,7 +279,8 @@ router.put('/:email', async (req, res) => {
     }
 
     await user.save();
-    res.json({ message: 'User updated successfully', user });
+    const updatedUser = await getHierarchicalUser(user.email);
+    res.json({ message: 'User updated successfully', user: updatedUser });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
