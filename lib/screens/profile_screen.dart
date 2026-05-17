@@ -28,13 +28,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _loadAlarmSetting() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _isAlarmSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+      _isAlarmSoundEnabled = prefs.getBool('alert_sound_enabled') ?? true;
     });
   }
 
   Future<void> _toggleAlarmSetting(bool value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isAlarmSoundEnabled', value);
+    await prefs.setBool('alert_sound_enabled', value);
     setState(() {
       _isAlarmSoundEnabled = value;
     });

@@ -17,7 +17,7 @@ class AlarmService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final isSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+      final isSoundEnabled = prefs.getBool('alert_sound_enabled') ?? true;
       if (!isSoundEnabled) {
         debugPrint('🔇 Alarm sound is disabled in settings. Skipping play.');
         return;

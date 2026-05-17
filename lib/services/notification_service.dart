@@ -133,7 +133,7 @@ class NotificationService {
     String? payload,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final isSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+    final isSoundEnabled = prefs.getBool('alert_sound_enabled') ?? true;
 
     final String channelId = isSoundEnabled ? 'threshold_alerts_v11_loud' : 'threshold_alerts_v11_silent';
     final String channelName = isSoundEnabled ? 'Emergency Threshold Alerts (Loud)' : 'Emergency Threshold Alerts (Silent)';
