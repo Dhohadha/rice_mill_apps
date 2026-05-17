@@ -135,9 +135,12 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     final isSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
 
+    final String channelId = isSoundEnabled ? 'threshold_alerts_v11_loud' : 'threshold_alerts_v11_silent';
+    final String channelName = isSoundEnabled ? 'Emergency Threshold Alerts (Loud)' : 'Emergency Threshold Alerts (Silent)';
+
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'threshold_alerts_v11',
-      'Emergency Threshold Alerts',
+      channelId,
+      channelName,
       channelDescription: 'Critical power alerts with action buttons',
       importance: Importance.max,
       priority: Priority.max,
