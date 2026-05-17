@@ -132,6 +132,9 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final isSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'threshold_alerts_v11',
       'Emergency Threshold Alerts',
@@ -139,10 +142,10 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.max,
       visibility: NotificationVisibility.public,
-      playSound: true,
+      playSound: isSoundEnabled,
       ongoing: true,      // Samsung never collapses ongoing — button always visible
       autoCancel: false,  // Only dismiss on explicit STOP action
-      sound: RawResourceAndroidNotificationSound('alarm'),
+      sound: isSoundEnabled ? const RawResourceAndroidNotificationSound('alarm') : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
@@ -162,8 +165,8 @@ class NotificationService {
 
     final NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidDetails,
-      iOS: const DarwinNotificationDetails(
-        presentSound: true,
+      iOS: DarwinNotificationDetails(
+        presentSound: isSoundEnabled,
         presentAlert: true,
         presentBadge: true,
       ),

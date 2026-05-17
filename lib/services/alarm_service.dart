@@ -1,6 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AlarmService {
   static final AlarmService _instance = AlarmService._internal();
@@ -16,6 +16,13 @@ class AlarmService {
     if (_isPlaying) return;
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final isSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+      if (!isSoundEnabled) {
+        debugPrint('🔇 Alarm sound is disabled in settings. Skipping play.');
+        return;
+      }
+
       await _player.setReleaseMode(ReleaseMode.loop);
       await _player.play(AssetSource('alarm.mp3'));
       _isPlaying = true;

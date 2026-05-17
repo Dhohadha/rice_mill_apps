@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rice_mill/screens/mixed_analysis_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/providers.dart';
+import '../services/alarm_service.dart';
 import 'share_access_screen.dart';
 import 'notifications_screen.dart';
 
@@ -15,6 +17,41 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isLoggingOut = false;
   final Set<String> _processingInvites = {}; // Set of ownerEmails being processed
+  bool _isAlarmSoundEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlarmSetting();
+  }
+
+  Future<void> _loadAlarmSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isAlarmSoundEnabled = prefs.getBool('isAlarmSoundEnabled') ?? true;
+    });
+  }
+
+  Future<void> _toggleAlarmSetting(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isAlarmSoundEnabled', value);
+    setState(() {
+      _isAlarmSoundEnabled = value;
+    });
+
+    if (!value) {
+      await AlarmService().stopAlarm();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? '🔊 Alarm sound enabled' : '🔇 Alarm sound muted'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +132,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
               },
+            ),
+            _buildSettingTileWithSwitch(
+              icon: _isAlarmSoundEnabled ? Icons.volume_up : Icons.volume_off,
+              title: 'Alarm Sound',
+              subtitle: _isAlarmSoundEnabled ? 'Audible emergency alerts are enabled' : 'Audible emergency alerts are muted',
+              value: _isAlarmSoundEnabled,
+              onChanged: _toggleAlarmSetting,
             ),
             
 
@@ -177,6 +221,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildSettingTileWithSwitch({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: value ? Colors.teal[50] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: value ? Colors.teal : Colors.grey),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+        trailing: Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: Colors.teal,
+        ),
       ),
     );
   }
