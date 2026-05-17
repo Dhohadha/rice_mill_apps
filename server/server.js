@@ -208,7 +208,7 @@ mqttClient.on('message', async (topic, message) => {
                   data: {
                     title: `⚠️ Alert: ${payload.deviceId}`,
                     body: alert.msg,
-                    alertId: `ALERT_${Date.now()}`,
+                    alertId: alert.type === 'PF' ? 'PF' : `ALERT_${Date.now()}`,
                     deviceId: payload.deviceId,
                   },
                   tokens: registrationTokens,

@@ -19,7 +19,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   String body = message.data['body'] ?? 'Limit exceeded';
   String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-  if (alertId == 'INVITE') {
+  if (alertId == 'INVITE' || alertId == 'PF') {
     await notificationService.showNormalNotification(
       id: message.hashCode,
       title: title,
@@ -71,7 +71,7 @@ class FCMService {
       String body = message.data['body'] ?? 'Limit exceeded';
       String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-      if (alertId == 'INVITE') {
+      if (alertId == 'INVITE' || alertId == 'PF') {
         _notificationService.showNormalNotification(
           id: message.hashCode,
           title: title,

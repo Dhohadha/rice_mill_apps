@@ -93,8 +93,8 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     // ---- PF Check ----
     if (data.pfAvg > 0 && data.pfAvg < settings.pfLimit) {
       currentAlerts.add('Low Power Factor: ${data.pfAvg.toStringAsFixed(3)} < ${settings.pfLimit.toStringAsFixed(2)}');
-      shouldTriggerAlarm = true;
-      _maybeNotify('PF', '⚠️ Low Power Factor', 'Current PF is ${data.pfAvg.toStringAsFixed(3)}');
+      // PF limit uses normal notification, no loud alarm
+      _maybeNotify('PF', '⚠️ Low Power Factor', 'Current PF is ${data.pfAvg.toStringAsFixed(3)}', isNormal: true);
       _activeBreaches.add('PF');
     } else {
       if (_activeBreaches.remove('PF')) {
@@ -129,17 +129,26 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     }
   }
 
-  void _maybeNotify(String type, String title, String body) {
+  void _maybeNotify(String type, String title, String body, {bool isNormal = false}) {
     final now = DateTime.now();
     final lastTime = _lastAlertTime[type];
 
     if (lastTime == null || now.difference(lastTime) > _alertCooldown) {
-      _notificationService.showThresholdAlert(
-        id: 999,
-        title: title,
-        body: body,
-        payload: 'history',
-      );
+      if (isNormal) {
+        _notificationService.showNormalNotification(
+          id: 888,
+          title: title,
+          body: body,
+          payload: 'history',
+        );
+      } else {
+        _notificationService.showThresholdAlert(
+          id: 999,
+          title: title,
+          body: body,
+          payload: 'history',
+        );
+      }
       _lastAlertTime[type] = now;
     }
   }
