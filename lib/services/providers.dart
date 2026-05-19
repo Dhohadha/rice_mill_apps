@@ -74,6 +74,21 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
       // Keep old state on error
     }
   }
+
+  Future<void> updateProfile(Map<String, dynamic> updates) async {
+    final api = ref.read(apiServiceProvider);
+    try {
+      final updatedData = await api.updateProfile(updates);
+      if (updatedData != null) {
+        state = AsyncData(updatedData);
+      } else {
+        throw Exception('Failed to update profile on the server');
+      }
+    } catch (e) {
+      debugPrint('Error in updateProfile notifier: $e');
+      rethrow;
+    }
+  }
 }
 
 // Settings Provider

@@ -17,16 +17,48 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     const ProfileScreen(),
   ];
 
+  bool _hasShownPrompt = false;
+
   @override
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(tabIndexProvider);
 
-    // Listen for invitations
+    // Listen for invitations and missing profile details
     ref.listen(userProfileProvider, (previous, next) {
       if (next.hasValue && next.value != null) {
-        final invites = next.value!['pendingInvitations'] as List<dynamic>? ?? [];
+        final user = next.value!;
+
+        // 1. Check for invitations first
+        final invites = user['pendingInvitations'] as List<dynamic>? ?? [];
         if (invites.isNotEmpty) {
           _showInvitationDialog(context, Map<String, dynamic>.from(invites.first));
+          return;
+        }
+
+        // 2. Check for missing details and prompt if not shown yet
+        if (!_hasShownPrompt) {
+          final isShared = user['isSharedUser'] == true;
+          if (isShared) {
+            final name = user['name']?.toString() ?? '';
+            final email = user['email']?.toString() ?? '';
+            final emailPrefix = email.split('@')[0];
+            final isPlaceholder = name.trim().isEmpty || name.contains('@') || name == emailPrefix;
+
+            if (isPlaceholder) {
+              _hasShownPrompt = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showMissingDetailDialog(context, isShared: true);
+              });
+            }
+          } else {
+            final millName = user['millName']?.toString() ?? '';
+            if (millName.trim().isEmpty) {
+              _hasShownPrompt = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showMissingDetailDialog(context, isShared: false);
+              });
+            }
+          }
         }
       }
     });
@@ -135,6 +167,97 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               child: isProcessing 
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('ACCEPT'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMissingDetailDialog(BuildContext context, {required bool isShared}) {
+    final controller = TextEditingController();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Force they must enter it!
+      builder: (context) => PopScope(
+        canPop: false, // Prevent physical back button
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(isShared ? Icons.person : Icons.factory_outlined, color: Colors.teal),
+              const SizedBox(width: 10),
+              Text(
+                isShared ? 'Enter Your Name' : 'Enter Mill Name', 
+                style: const TextStyle(fontWeight: FontWeight.bold)
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isShared 
+                  ? 'Please enter your full name to show it in the application and invite logs.'
+                  : 'Please enter your Rice Mill name to complete your profile.',
+                style: const TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: isShared ? 'Your Full Name' : 'Rice Mill Name',
+                  prefixIcon: Icon(isShared ? Icons.person_outline : Icons.factory_outlined, color: Colors.teal),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                  filled: true,
+                  fillColor: Colors.grey.withOpacity(0.05),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+
+                Navigator.pop(context);
+
+                try {
+                  final updates = isShared ? {'name': text} : {'millName': text};
+                  await ref.read(userProfileProvider.notifier).updateProfile(updates);
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isShared 
+                            ? 'Welcome, $text!' 
+                            : 'Rice Mill Name set to $text successfully!'
+                        )
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  // If update failed, allow trying again
+                  setState(() => _hasShownPrompt = false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to update: $e')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(120, 45),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),

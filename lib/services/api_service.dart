@@ -377,4 +377,21 @@ class ApiService {
     }
     return [];
   }
+
+  Future<Map<String, dynamic>?> updateProfile(Map<String, dynamic> updates) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/users/profile/update'),
+        headers: await _getHeaders(),
+        body: jsonEncode(updates),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['user'] as Map<String, dynamic>?;
+      }
+    } catch (e) {
+      debugPrint('Error updating profile API: $e');
+    }
+    return null;
+  }
 }

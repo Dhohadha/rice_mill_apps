@@ -58,6 +58,7 @@ class _AddUserScreenState extends State<AddUserScreen> {
                   _phoneController,
                   Icons.phone,
                   type: TextInputType.phone,
+                  isRequired: false,
                 ),
                 const SizedBox(height: 30),
 
@@ -80,6 +81,7 @@ class _AddUserScreenState extends State<AddUserScreen> {
                   'Rice Mill Name (e.g., Radha Krishna)',
                   _millNameController,
                   Icons.factory_outlined,
+                  isRequired: false,
                 ),
                 const SizedBox(height: 15),
                 const SizedBox(height: 40),
@@ -168,11 +170,12 @@ class _AddUserScreenState extends State<AddUserScreen> {
     TextEditingController controller,
     IconData icon, {
     TextInputType type = TextInputType.text,
+    bool isRequired = true,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: type,
-      validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+      validator: isRequired ? (val) => val == null || val.isEmpty ? 'Required' : null : null,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: Colors.teal.withValues(alpha: 0.54)),

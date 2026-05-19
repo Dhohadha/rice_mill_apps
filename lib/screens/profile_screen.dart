@@ -92,11 +92,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          userProfile.value?['millName'] ?? 'Rice Mill',
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        Text(email, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                        if (userProfile.value?['isSharedUser'] == true) ...[
+                          Text(
+                            userProfile.value?['name'] == null || userProfile.value?['name'].toString().trim().isEmpty == true
+                              ? email.split('@')[0]
+                              : userProfile.value?['name'],
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Mill: ${userProfile.value?['millName'] == null || userProfile.value?['millName'].toString().trim().isEmpty == true ? 'Rice Mill' : userProfile.value?['millName']}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ] else ...[
+                          Text(
+                            userProfile.value?['millName'] == null || userProfile.value?['millName'].toString().trim().isEmpty == true
+                              ? 'Rice Mill Name Not Set'
+                              : userProfile.value?['millName'],
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            userProfile.value?['name'] ?? 'Owner',
+                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                          ),
+                        ],
+                        Text(email, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -139,6 +158,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               subtitle: _isAlarmSoundEnabled ? 'Audible emergency alerts are enabled' : 'Audible emergency alerts are muted',
               value: _isAlarmSoundEnabled,
               onChanged: _toggleAlarmSetting,
+            ),
+            _buildSettingTile(
+              icon: Icons.edit_note,
+              title: userProfile.value?['isSharedUser'] == true ? 'Edit My Name' : 'Edit Rice Mill Name',
+              subtitle: userProfile.value?['isSharedUser'] == true 
+                ? 'Update your full name shown in the app' 
+                : 'Update the factory or mill name',
+              onTap: () {
+                _showEditNameOrMillDialog();
+              },
             ),
             
 
@@ -255,6 +284,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onChanged: onChanged,
           activeColor: Colors.teal,
         ),
+      ),
+    );
+  }
+
+  void _showEditNameOrMillDialog() {
+    final userProfile = ref.read(userProfileProvider).value;
+    if (userProfile == null) return;
+
+    final isShared = userProfile['isSharedUser'] == true;
+    final controller = TextEditingController(
+      text: isShared ? (userProfile['name'] ?? '') : (userProfile['millName'] ?? ''),
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(isShared ? 'Edit My Name' : 'Edit Rice Mill Name'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: isShared ? 'Enter your full name' : 'Enter Rice Mill name',
+            prefixIcon: Icon(isShared ? Icons.person : Icons.factory_outlined, color: Colors.teal),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newValue = controller.text.trim();
+              if (newValue.isEmpty) return;
+
+              Navigator.pop(context);
+              
+              try {
+                final updates = isShared ? {'name': newValue} : {'millName': newValue};
+                await ref.read(userProfileProvider.notifier).updateProfile(updates);
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Profile updated successfully!')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error updating profile: $e')),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
