@@ -104,29 +104,7 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _revokeAccess(String sharedEmail) async {
-    setState(() => _isLoading = true);
-    try {
-      final response = await http.delete(
-        Uri.parse('${ApiService.baseUrl}/api/users/${_user['email']}/share/$sharedEmail'),
-      );
-      if (response.statusCode == 200) {
-        setState(() {
-          _user = json.decode(response.body)['owner'];
-        });
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access revoked')));
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${response.body}')));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
+  }  
   Future<void> _deleteUser() async {
     setState(() => _isLoading = true);
     try {
@@ -212,31 +190,7 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
         ],
       ),
     );
-  }
-
-  void _showRevokeAccessConfirmation(String sharedEmail) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Revoke Access'),
-        content: Text('Are you sure you want to revoke shared access from $sharedEmail?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _revokeAccess(sharedEmail);
-            },
-            child: const Text('Revoke', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
+  }  
   void _showAddDeviceDialog() {
     final TextEditingController controller = TextEditingController();
     showDialog(
@@ -324,6 +278,21 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
+              final origName = _user['name'] ?? '';
+              final origEmail = _user['email'] ?? '';
+              final origPhone = _user['phone'] ?? '';
+              final origMill = _user['millName'] ?? '';
+
+              final hasChanges = nameController.text.trim() != origName.toString().trim() ||
+                  emailController.text.trim() != origEmail.toString().trim() ||
+                  phoneController.text.trim() != origPhone.toString().trim() ||
+                  millController.text.trim() != origMill.toString().trim();
+
+              if (!hasChanges) {
+                Navigator.pop(context);
+                return;
+              }
+
               showDialog(
                 context: context,
                 builder: (confirmContext) => AlertDialog(
@@ -339,10 +308,10 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
                         Navigator.pop(confirmContext); // close confirm dialog
                         Navigator.pop(context); // close edit dialog
                         _updateUser({
-                          'name': nameController.text,
-                          'newEmail': emailController.text,
-                          'phone': phoneController.text,
-                          'millName': millController.text,
+                          'name': nameController.text.trim(),
+                          'newEmail': emailController.text.trim(),
+                          'phone': phoneController.text.trim(),
+                          'millName': millController.text.trim(),
                         });
                       },
                       child: const Text('Save', style: TextStyle(color: Colors.teal)),
@@ -528,15 +497,10 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.cancel_outlined, 
-                      size: 20, 
-                      color: isRevoked ? Colors.grey : Colors.redAccent
-                    ),
-                    onPressed: isRevoked ? null : () => _showRevokeAccessConfirmation(email),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey,
                   ),
                 ],
               ),
