@@ -11,6 +11,7 @@ import 'screens/notifications_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/not_registered_screen.dart';
 import 'screens/access_revoked_screen.dart';
+import 'screens/loading_screen.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/providers.dart';
@@ -122,7 +123,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           return authState.when(
             skipLoadingOnReload: true,
             skipLoadingOnRefresh: true,
-            loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+            loading: () => const LoadingScreen(message: 'Signing in...'),
             error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
             data: (user) {
               if (user != null) {
@@ -136,25 +137,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
                       data: (profile) {
                         // Null means server returned a non-200 error (timeout/down)
                         if (profile == null) {
-                          return Scaffold(
-                            backgroundColor: Colors.white,
-                            body: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(32),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.cloud_off, size: 64, color: Colors.grey),
-                                    const SizedBox(height: 20),
-                                    const Text('Could not connect to server', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 8),
-                                    const Text('Please check your network and try again.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-                                    const SizedBox(height: 32),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
+                          return const LoadingScreen(message: 'Waiting for server response...');
                         }
 
                         // Access was revoked by the owner
@@ -172,31 +155,13 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
                         return const MainScreen();
                       },
-                      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+                      loading: () => const LoadingScreen(message: 'Syncing your data...'),
                       error: (err, _) {
                         // 403 = not registered in the admin system
                         if (err.toString().contains('403')) {
                           return const NotRegisteredScreen();
                         }
-                        return Scaffold(
-                          backgroundColor: Colors.white,
-                          body: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.cloud_off, size: 64, color: Colors.grey),
-                                  const SizedBox(height: 20),
-                                  const Text('Connection Error', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  Text(err.toString(), textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                  const SizedBox(height: 32),
-                                  ],
-                              ),
-                            ),
-                          ),
-                        );
+                        return const LoadingScreen(message: 'Connecting to server...');
                       },
                     );
                   },

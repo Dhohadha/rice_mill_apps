@@ -31,7 +31,31 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
   FutureOr<Map<String, dynamic>?> build() async {
     ref.keepAlive();
     final api = ref.watch(apiServiceProvider);
-    return await api.syncUser();
+    try {
+      final profile = await api.syncUser();
+      if (profile == null) {
+        _scheduleRetry();
+      }
+      return profile;
+    } catch (e) {
+      if (e.toString().contains('403')) {
+        rethrow;
+      }
+      _scheduleRetry();
+      rethrow;
+    }
+  }
+
+  void _scheduleRetry() {
+    bool isCancelled = false;
+    ref.onDispose(() {
+      isCancelled = true;
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!isCancelled) {
+        ref.invalidateSelf();
+      }
+    });
   }
 
   Future<void> refreshProfileQuietly() async {
