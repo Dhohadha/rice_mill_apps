@@ -21,6 +21,24 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
     _user = widget.user;
   }
 
+  Future<void> _refreshUserDetails() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/api/users/${_user['email']}'),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          _user = json.decode(response.body);
+        });
+      }
+    } catch (e) {
+      // Ignored
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _addDevice(String deviceId) async {
     setState(() => _isLoading = true);
     try {
@@ -392,60 +410,71 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
           final name = subUser['name'] ?? 'Pending Registration';
           final isRevoked = subUser['accessRevoked'] == true;
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: isRevoked ? Colors.red.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: isRevoked ? Border.all(color: Colors.red.withValues(alpha: 0.2)) : null,
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: isRevoked ? Colors.red.shade100 : Colors.teal.shade50,
-                  child: Icon(
-                    isRevoked ? Icons.block : Icons.person_outline, 
-                    size: 18, 
-                    color: isRevoked ? Colors.red : Colors.teal
-                  ),
+          return GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => UserDetailsScreen(user: subUser),
                 ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isRevoked ? Colors.red : Colors.black87,
+              );
+              _refreshUserDetails();
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: isRevoked ? Colors.red.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: isRevoked ? Border.all(color: Colors.red.withValues(alpha: 0.2)) : null,
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isRevoked ? Colors.red.shade100 : Colors.teal.shade50,
+                    child: Icon(
+                      isRevoked ? Icons.block : Icons.person_outline, 
+                      size: 18, 
+                      color: isRevoked ? Colors.red : Colors.teal
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isRevoked ? Colors.red : Colors.black87,
+                          ),
                         ),
-                      ),
-                      Text(
-                        email,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      if (isRevoked)
-                        const Text(
-                          'ACCESS REVOKED',
-                          style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                        Text(
+                          email,
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
-                    ],
+                        if (isRevoked)
+                          const Text(
+                            'ACCESS REVOKED',
+                            style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.cancel_outlined, 
-                    size: 20, 
-                    color: isRevoked ? Colors.grey : Colors.redAccent
+                  IconButton(
+                    icon: Icon(
+                      Icons.cancel_outlined, 
+                      size: 20, 
+                      color: isRevoked ? Colors.grey : Colors.redAccent
+                    ),
+                    onPressed: isRevoked ? null : () => _revokeAccess(email),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
-                  onPressed: isRevoked ? null : () => _revokeAccess(email),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }),

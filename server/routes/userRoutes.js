@@ -136,6 +136,18 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Admin Route: Get details of a single user (Owner or Shared User)
+router.get('/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await getHierarchicalUser(email);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin Route: Add device to user
 router.post('/:email/devices', async (req, res) => {
   try {
