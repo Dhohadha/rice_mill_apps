@@ -289,21 +289,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (userProfile == null) return;
 
     final isShared = userProfile['isSharedUser'] == true;
-    final controller = TextEditingController(
-      text: isShared ? (userProfile['name'] ?? '') : (userProfile['millName'] ?? ''),
-    );
+    final nameController = TextEditingController(text: userProfile['name'] ?? '');
+    final millController = TextEditingController(text: userProfile['millName'] ?? '');
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(isShared ? 'Edit My Name' : 'Edit Rice Mill Name'),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: isShared ? 'Enter your full name' : 'Enter Rice Mill name',
-            prefixIcon: Icon(isShared ? Icons.person : Icons.factory_outlined, color: Colors.teal),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        title: Text(isShared ? 'Edit My Name' : 'Edit Profile & Rice Mill'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'My Name',
+                  hintText: 'Enter your full name',
+                  prefixIcon: const Icon(Icons.person, color: Colors.teal),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              if (!isShared) ...[
+                const SizedBox(height: 15),
+                TextField(
+                  controller: millController,
+                  decoration: InputDecoration(
+                    labelText: 'Rice Mill Name',
+                    hintText: 'Enter Rice Mill name',
+                    prefixIcon: const Icon(Icons.factory_outlined, color: Colors.teal),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         actions: [
@@ -313,13 +332,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final newValue = controller.text.trim();
-              if (newValue.isEmpty) return;
+              final newName = nameController.text.trim();
+              final newMill = millController.text.trim();
+
+              if (newName.isEmpty) return;
+              if (!isShared && newMill.isEmpty) return;
 
               Navigator.pop(context);
               
               try {
-                final updates = isShared ? {'name': newValue} : {'millName': newValue};
+                final Map<String, dynamic> updates = isShared
+                    ? {'name': newName}
+                    : {'name': newName, 'millName': newMill};
+                    
                 await ref.read(userProfileProvider.notifier).updateProfile(updates);
                 
                 if (mounted) {
