@@ -28,6 +28,15 @@ final userProfileProvider = AsyncNotifierProvider<UserProfileNotifier, Map<Strin
 });
 
 class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
+  Map<String, dynamic> _sanitizeProfile(Map<String, dynamic> profile) {
+    if (profile.containsKey('assignedDevices') && profile['assignedDevices'] is List) {
+      profile['assignedDevices'] = (profile['assignedDevices'] as List)
+          .map((d) => d.toString().trim())
+          .toList();
+    }
+    return profile;
+  }
+
   @override
   FutureOr<Map<String, dynamic>?> build() async {
     ref.keepAlive();
@@ -42,7 +51,7 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
       if (profile == null) {
         throw 'Server returned invalid or empty profile response';
       }
-      return profile;
+      return _sanitizeProfile(profile);
     } catch (e) {
       if (e.toString().contains('403')) {
         rethrow;
@@ -69,7 +78,7 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
       final api = ref.read(apiServiceProvider);
       final newData = await api.syncUser();
       if (newData != null) {
-        state = AsyncData(newData);
+        state = AsyncData(_sanitizeProfile(newData));
       }
     } catch (e) {
       // Keep old state on error
@@ -81,7 +90,7 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
     try {
       final updatedData = await api.updateProfile(updates);
       if (updatedData != null) {
-        state = AsyncData(updatedData);
+        state = AsyncData(_sanitizeProfile(updatedData));
       } else {
         throw Exception('Failed to update profile on the server');
       }
