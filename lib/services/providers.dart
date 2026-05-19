@@ -34,7 +34,7 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
     try {
       final profile = await api.syncUser();
       if (profile == null) {
-        _scheduleRetry();
+        throw 'Server returned invalid or empty profile response';
       }
       return profile;
     } catch (e) {
@@ -62,7 +62,9 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
     try {
       final api = ref.read(apiServiceProvider);
       final newData = await api.syncUser();
-      state = AsyncData(newData);
+      if (newData != null) {
+        state = AsyncData(newData);
+      }
     } catch (e) {
       // Keep old state on error
     }
