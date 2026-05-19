@@ -30,6 +30,11 @@ class UserProfileNotifier extends AsyncNotifier<Map<String, dynamic>?> {
   @override
   FutureOr<Map<String, dynamic>?> build() async {
     ref.keepAlive();
+    // Watch authState to rebuild profile on account switch
+    final authState = ref.watch(authStateProvider).value;
+    if (authState == null) {
+      return null;
+    }
     final api = ref.watch(apiServiceProvider);
     try {
       final profile = await api.syncUser();
@@ -295,6 +300,11 @@ class NotificationsNotifier extends AsyncNotifier<List<dynamic>> {
   @override
   FutureOr<List<dynamic>> build() async {
     ref.keepAlive();
+    // Watch authState to reload notifications on account switch
+    final authState = ref.watch(authStateProvider).value;
+    if (authState == null) {
+      return [];
+    }
     final api = ref.watch(apiServiceProvider);
     return await api.getNotifications();
   }
