@@ -119,6 +119,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.white, size: 20),
+                    onPressed: () => _showEditNameOrMillDialog(),
+                    tooltip: userProfile.value?['isSharedUser'] == true ? 'Edit Name' : 'Edit Rice Mill Name',
+                  ),
                 ],
               ),
             ),
@@ -159,16 +164,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               value: _isAlarmSoundEnabled,
               onChanged: _toggleAlarmSetting,
             ),
-            _buildSettingTile(
-              icon: Icons.edit_note,
-              title: userProfile.value?['isSharedUser'] == true ? 'Edit My Name' : 'Edit Rice Mill Name',
-              subtitle: userProfile.value?['isSharedUser'] == true 
-                ? 'Update your full name shown in the app' 
-                : 'Update the factory or mill name',
-              onTap: () {
-                _showEditNameOrMillDialog();
-              },
-            ),
+
             
 
             // Pending Invitations Section
