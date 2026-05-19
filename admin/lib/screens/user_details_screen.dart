@@ -191,6 +191,52 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
     );
   }
 
+  void _showRemoveDeviceConfirmation(String deviceId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Device'),
+        content: Text('Are you sure you want to remove device $deviceId from this user?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeDevice(deviceId);
+            },
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRevokeAccessConfirmation(String sharedEmail) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revoke Access'),
+        content: Text('Are you sure you want to revoke shared access from $sharedEmail?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _revokeAccess(sharedEmail);
+            },
+            child: const Text('Revoke', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddDeviceDialog() {
     final TextEditingController controller = TextEditingController();
     showDialog(
@@ -278,13 +324,32 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              _updateUser({
-                'name': nameController.text,
-                'newEmail': emailController.text,
-                'phone': phoneController.text,
-                'millName': millController.text,
-              });
+              showDialog(
+                context: context,
+                builder: (confirmContext) => AlertDialog(
+                  title: const Text('Confirm Changes'),
+                  content: const Text('Are you sure you want to update this user\'s details?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(confirmContext),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(confirmContext); // close confirm dialog
+                        Navigator.pop(context); // close edit dialog
+                        _updateUser({
+                          'name': nameController.text,
+                          'newEmail': emailController.text,
+                          'phone': phoneController.text,
+                          'millName': millController.text,
+                        });
+                      },
+                      child: const Text('Save', style: TextStyle(color: Colors.teal)),
+                    ),
+                  ],
+                ),
+              );
             },
             child: const Text('Save'),
           ),
@@ -469,7 +534,7 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
                       size: 20, 
                       color: isRevoked ? Colors.grey : Colors.redAccent
                     ),
-                    onPressed: isRevoked ? null : () => _revokeAccess(email),
+                    onPressed: isRevoked ? null : () => _showRevokeAccessConfirmation(email),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -579,7 +644,7 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
         title: Text(deviceId, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         trailing: IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            onPressed: () => _removeDevice(deviceId),
+            onPressed: () => _showRemoveDeviceConfirmation(deviceId),
           ),
       ),
     );
