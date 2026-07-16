@@ -15,13 +15,13 @@ class ApiService {
   );
 
   static String get baseUrl {
-    if (kIsWeb) return 'http://$_envIP:8000';
+    if (kIsWeb) return 'http://$_envIP:7007';
     try {
       if (Platform.isAndroid || Platform.isIOS) {
-        return 'http://$_envIP:8000';
+        return 'http://$_envIP:7007';
       }
     } catch (_) {}
-    return 'http://localhost:8000';
+    return 'http://localhost:70077';
   }
 
   Future<Map<String, String>> _getHeaders() async {

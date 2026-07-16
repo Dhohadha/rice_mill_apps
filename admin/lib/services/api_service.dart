@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 class ApiService {
-  static const String _defaultIP = '13.233.76.8';
+  static const String _defaultIP = '10.243.29.35';
   static const String _envIP = String.fromEnvironment('API_IP', defaultValue: _defaultIP);
 
   static String get baseUrl {
