@@ -27,31 +27,41 @@ class AnalysisScreen extends ConsumerWidget {
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionTitle('Weekly Consumption (kWh)'),
-              const SizedBox(height: 15),
-              _buildWeeklyChart(sevenDayData, ref, focusedDate),
-              const SizedBox(height: 15),
-              _buildCustomRangeButton(context),
-              const SizedBox(height: 30),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.wait([
+            ref.refresh(historicalUsageProvider(deviceId).future),
+            ref.refresh(dailyConsumptionProvider(deviceId).future),
+            ref.refresh(dailyStatsProvider(deviceId).future),
+          ]);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionTitle('Weekly Consumption (kWh)'),
+                const SizedBox(height: 15),
+                _buildWeeklyChart(sevenDayData, ref, focusedDate),
+                const SizedBox(height: 15),
+                _buildCustomRangeButton(context),
+                const SizedBox(height: 30),
 
-              _buildSectionTitle(isToday ? "Today's Summary" : "${DateFormat('MMM dd').format(focusedDate)} Summary"),
-              const SizedBox(height: 15),
-              _buildTodaySummary(dailyData, dailyStats),
-              const SizedBox(height: 30),
-              
-              _buildSectionTitle(isToday ? "Today's Performance Peaks" : "${DateFormat('MMM dd').format(focusedDate)} Peaks"),
-              const SizedBox(height: 8),
-              Text(isToday ? "Max/Min values recorded since midnight" : "Max/Min values recorded on this day", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(height: 15),
-              _buildExtremeGrid(dailyStats),
-              const SizedBox(height: 30),
-            ],
+                _buildSectionTitle(isToday ? "Today's Summary" : "${DateFormat('MMM dd').format(focusedDate)} Summary"),
+                const SizedBox(height: 15),
+                _buildTodaySummary(dailyData, dailyStats),
+                const SizedBox(height: 30),
+                
+                _buildSectionTitle(isToday ? "Today's Performance Peaks" : "${DateFormat('MMM dd').format(focusedDate)} Peaks"),
+                const SizedBox(height: 8),
+                Text(isToday ? "Max/Min values recorded since midnight" : "Max/Min values recorded on this day", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 15),
+                _buildExtremeGrid(dailyStats),
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:rice_mill/models/app_settings.dart';
 import 'package:rice_mill/services/alert_manager.dart';
 
@@ -10,24 +10,13 @@ import '../widgets/gauge_widget.dart';
 import '../screens/settings_screen.dart';
 import '../screens/analysis_screen.dart';
 
+final graphTypeProvider = StateProvider.autoDispose<String>((ref) => 'KVA');
+
 class DevicePage extends ConsumerWidget {
   final String deviceId;
   final String millName;
 
   const DevicePage({super.key, required this.deviceId, required this.millName});
-
-  Future<void> _selectDate(BuildContext context, WidgetRef ref) async {
-    final selectedDate = ref.read(selectedDateProvider);
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null && picked != selectedDate) {
-      ref.read(selectedDateProvider.notifier).setDate(picked);
-    }
-  }
 
   Future<void> _navToSettings(
     BuildContext context,
@@ -64,19 +53,29 @@ class DevicePage extends ConsumerWidget {
     }
   }
 
+  String _formatPeakTime(String? timeStr) {
+    if (timeStr == null) return '';
+    try {
+      final DateTime time = DateTime.parse(timeStr).toLocal();
+      return DateFormat('dd/MM HH:mm').format(time);
+    } catch (_) {
+      return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mqttData = ref.watch(mqttDataProvider(deviceId));
     final settings = ref.watch(settingsProvider);
-    final consumedKwh = ref.watch(consumedKwhProvider(deviceId));
     final isDayGraph = ref.watch(isDayGraphProvider);
     final graphData = ref.watch(graphDataProvider(deviceId));
-    final todayKwh = ref.watch(todayKwhProvider(deviceId));
+    final todayDetailedUsage = ref.watch(todayDetailedUsageProvider(deviceId));
+    final monthlyStats = ref.watch(customRangeStatsProvider(deviceId));
+    final monthlyDetailedUsage = ref.watch(rangeDetailedUsageProvider(deviceId));
     final todayKva = ref.watch(todayPeriodStatsProvider(deviceId));
-    final consumedKva = ref.watch(periodStatsProvider(deviceId));
-    final selectedDate = ref.watch(selectedDateProvider);
     final alertState = ref.watch(alertManagerProvider(deviceId));
     final userProfile = ref.watch(userProfileProvider);
+    final graphType = ref.watch(graphTypeProvider);
 
     return mqttData.when(
       skipLoadingOnReload: true,
@@ -98,6 +97,9 @@ class DevicePage extends ConsumerWidget {
             ref.refresh(graphDataProvider(deviceId).future),
             ref.refresh(consumedKwhProvider(deviceId).future),
             ref.refresh(todayKwhProvider(deviceId).future),
+            ref.refresh(todayDetailedUsageProvider(deviceId).future),
+            ref.refresh(customRangeStatsProvider(deviceId).future),
+            ref.refresh(rangeDetailedUsageProvider(deviceId).future),
             ref.refresh(todayPeriodStatsProvider(deviceId).future),
             ref.refresh(periodStatsProvider(deviceId).future),
           ]);
@@ -223,208 +225,197 @@ class DevicePage extends ConsumerWidget {
                 ),
                 
                 const SizedBox(height: 25),
-                // New Consumption Box
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA5E6C9),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Colors.teal.withValues(alpha: 0.1),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildMetricCard(
-                              'TODAY UNITS',
-                              todayKwh.when(
-                                data: (d) => d.toStringAsFixed(1),
-                                error: (_, _) => 'Error',
-                                loading: () => '...',
-                              ),
-                              footer: const Text(
-                                '12AM - Now',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.black45,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildMetricCard(
-                              'CONSUMED UNITS',
-                              consumedKwh.when(
-                                data: (d) => d.toStringAsFixed(1),
-                                error: (_, _) => 'Error',
-                                loading: () => '...',
-                              ),
-                              footer: Text(
-                                'From ${DateFormat('dd MMM').format(selectedDate)}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.blue[700],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              onTap: () => _selectDate(context, ref),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildMetricCard(
-                              'TODAY KVA',
-                              todayKva.when(
-                                data: (stats) {
-                                  final val = stats?['kva']?['max'];
-                                  return val != null ? val.toStringAsFixed(2) : '0.00';
-                                },
-                                error: (_, _) => 'Error',
-                                loading: () => '...',
-                              ),
-                              footer: todayKva.when(
-                                data: (stats) {
-                                  final maxTimeStr = stats?['kva']?['maxTime'];
-                                  if (maxTimeStr != null) {
-                                    final dateTime = DateTime.parse(maxTimeStr).toLocal();
-                                    return Text(
-                                      'Peak: ${DateFormat('hh:mm a').format(dateTime)}',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.black45,
-                                      ),
-                                    );
-                                  }
-                                  return const Text(
-                                    '12AM - Now',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.black45,
-                                    ),
-                                  );
-                                },
-                                error: (_, _) => const Text(
-                                  'Error',
-                                  style: TextStyle(fontSize: 10, color: Colors.red),
-                                ),
-                                loading: () => const Text(
-                                  '...',
-                                  style: TextStyle(fontSize: 10),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildMetricCard(
-                              'CONSUMED KVA',
-                              consumedKva.when(
-                                data: (stats) {
-                                  final val = stats?['kva']?['max'];
-                                  return val != null ? val.toStringAsFixed(2) : '0.00';
-                                },
-                                error: (_, _) => 'Error',
-                                loading: () => '...',
-                              ),
-                              footer: consumedKva.when(
-                                data: (stats) {
-                                  final maxTimeStr = stats?['kva']?['maxTime'];
-                                  if (maxTimeStr != null) {
-                                    final dateTime = DateTime.parse(maxTimeStr).toLocal();
-                                    return Text(
-                                      'Peak: ${DateFormat('dd MMM, hh:mm a').format(dateTime)}',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.blue[700],
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    );
-                                  }
-                                  return Text(
-                                    'From ${DateFormat('dd MMM').format(selectedDate)}',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.blue[700],
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                },
-                                error: (_, _) => const Text(
-                                  'Error',
-                                  style: TextStyle(fontSize: 10, color: Colors.red),
-                                ),
-                                loading: () => const Text(
-                                  '...',
-                                  style: TextStyle(fontSize: 10),
-                                ),
-                              ),
-                              onTap: () => _selectDate(context, ref),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 25),
-                // Metrics Section
-                Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildMetricCard(
-                          'POWER FACTOR',
-                          data.pfAvg.toStringAsFixed(3),
+                // Power Factor Metrics Card (2x2 grid style using Rows)
+                _buildOverviewCard(
+                  title: 'POWER FACTOR METRICS',
+                  backgroundColor: const Color(0xFFFFF7ED),
+                  textColor: Colors.orange[900]!,
+                  children: [
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'LIVE PF',
+                          value: data.pfAvg.toStringAsFixed(3),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.orange[900]!,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildMetricCard(
-                          'P.F LIMIT',
-                          settings?.pfLimit.toStringAsFixed(3) ?? '0.900',
-                          footer: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Limit: ${settings?.pfLimit.toStringAsFixed(2) ?? "0.90"}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.black45,
-                                ),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'P.F LIMIT',
+                          value: settings?.pfLimit.toStringAsFixed(3) ?? '0.850',
+                          labelColor: Colors.black87,
+                          valueColor: Colors.orange[900]!,
                           onTap: () => _navToSettings(
                             context,
                             ref,
                             'PF limit',
                             'PF',
-                            settings?.pfLimit ?? 0.9,
+                            settings?.pfLimit ?? 0.85,
                           ),
+                          icon: Icon(Icons.edit, color: Colors.teal[700], size: 12),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'TODAY AVG PF',
+                          value: todayKva.when(
+                            data: (stats) => stats?['avgPF']?.toStringAsFixed(3) ?? '0.000',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.orange[900]!,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'MONTHLY AVG PF',
+                          value: monthlyStats.when(
+                            data: (stats) => stats?['avgPF']?.toStringAsFixed(3) ?? '0.000',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.orange[900]!,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Energy & Demand Metrics Card (2x4 grid style using Rows)
+                _buildOverviewCard(
+                  title: 'ENERGY & DEMAND METRICS',
+                  backgroundColor: const Color(0xFFF0FDF4),
+                  textColor: Colors.green[900]!,
+                  children: [
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'TODAY CONSUMED KWH',
+                          value: todayDetailedUsage.when(
+                            data: (d) => d['todayKWh']?.toStringAsFixed(1) ?? '0.0',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.green[900]!,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'MONTHLY CONSUMED KWH',
+                          value: monthlyDetailedUsage.when(
+                            data: (d) => d['totalKWhConsumed']?.toStringAsFixed(1) ?? '0.0',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.blue[900]!,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'TODAY CONSUMED KVA',
+                          value: todayDetailedUsage.when(
+                            data: (d) => d['todayKVAh']?.toStringAsFixed(1) ?? '0.0',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.green[900]!,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'MONTHLY CONSUMED KVA',
+                          value: monthlyDetailedUsage.when(
+                            data: (d) => d['totalKVaConsumed']?.toStringAsFixed(1) ?? '0.0',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.blue[900]!,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'TODAY PEAK KW',
+                          value: todayKva.when(
+                            data: (stats) => stats?['kw']?['max']?.toStringAsFixed(2) ?? '0.00',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          subtitle: todayKva.when(
+                            data: (stats) => _formatPeakTime(stats?['kw']?['maxTime']),
+                            error: (_, _) => '',
+                            loading: () => '',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.green[900]!,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'MONTHLY PEAK KW',
+                          value: monthlyStats.when(
+                            data: (stats) => stats?['kw']?['max']?.toStringAsFixed(2) ?? '0.00',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          subtitle: monthlyStats.when(
+                            data: (stats) => _formatPeakTime(stats?['kw']?['maxTime']),
+                            error: (_, _) => '',
+                            loading: () => '',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.blue[900]!,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildGridMetricTile(
+                          label: 'TODAY PEAK KVA',
+                          value: todayKva.when(
+                            data: (stats) => stats?['kva']?['max']?.toStringAsFixed(2) ?? '0.00',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          subtitle: todayKva.when(
+                            data: (stats) => _formatPeakTime(stats?['kva']?['maxTime']),
+                            error: (_, _) => '',
+                            loading: () => '',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.green[900]!,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildGridMetricTile(
+                          label: 'MONTHLY PEAK KVA',
+                          value: monthlyStats.when(
+                            data: (stats) => stats?['kva']?['max']?.toStringAsFixed(2) ?? '0.00',
+                            error: (_, _) => 'Error',
+                            loading: () => '...',
+                          ),
+                          subtitle: monthlyStats.when(
+                            data: (stats) => _formatPeakTime(stats?['kva']?['maxTime']),
+                            error: (_, _) => '',
+                            loading: () => '',
+                          ),
+                          labelColor: Colors.black87,
+                          valueColor: Colors.blue[900]!,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 25),
                 // Analysis Button
@@ -491,7 +482,7 @@ class DevicePage extends ConsumerWidget {
                             // Sticky Y-Axis
                             SizedBox(
                               width: 40,
-                              child: LineChart(_buildChartData([], settings, isDayGraph, showLeftTitles: true)),
+                              child: LineChart(_buildChartData([], settings, isDayGraph, graphType, showLeftTitles: true)),
                             ),
                             // Scrollable Graph Area
                             Expanded(
@@ -501,7 +492,7 @@ class DevicePage extends ConsumerWidget {
                                 child: Container(
                                   width: chartWidth < minWidth ? minWidth : chartWidth,
                                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: LineChart(_buildChartData(data, settings, isDayGraph, showLeftTitles: false)),
+                                  child: LineChart(_buildChartData(data, settings, isDayGraph, graphType, showLeftTitles: false)),
                                 ),
                               ),
                             ),
@@ -509,21 +500,21 @@ class DevicePage extends ConsumerWidget {
                         );
                       } else {
                         // For the 1-hour graph, keep it fixed to the screen width
-                        return LineChart(_buildChartData(data, settings, isDayGraph, showLeftTitles: true));
+                        return LineChart(_buildChartData(data, settings, isDayGraph, graphType, showLeftTitles: true));
                       }
                     },
                     error: (e, _) => Center(child: Text('Error: $e')),
                     loading: () => const Center(child: CircularProgressIndicator(color: Colors.teal)),
                   ),
                 ),
-                const SizedBox(height: 10),
-                // Legend
+                const SizedBox(height: 15),
+                // Interactive Graph Toggle under the Graph
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildLegend(Colors.blue, 'KVA (CMD)'),
+                    _buildGraphTypeToggle(ref, 'KVA', graphType == 'KVA', Colors.blue),
                     const SizedBox(width: 20),
-                    _buildLegend(Colors.green, 'KW (Power)'),
+                    _buildGraphTypeToggle(ref, 'KW', graphType == 'KW', Colors.green),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -602,74 +593,6 @@ class DevicePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMetricCard(
-    String label,
-    String value, {
-    Widget? footer,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: const BoxDecoration(color: Colors.transparent),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black87,
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                ),
-                maxLines: 1,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: label == 'CONSUMED kWh'
-                          ? Colors.blue[800]
-                          : Colors.black87,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (footer != null) ...[
-              const SizedBox(height: 6),
-              footer,
-            ] else
-              const SizedBox(height: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildToggleButton(WidgetRef ref, String text, bool isActive) {
     return GestureDetector(
       onTap: () => ref.read(isDayGraphProvider.notifier).toggle(text == 'Day'),
@@ -690,8 +613,56 @@ class DevicePage extends ConsumerWidget {
     );
   }
 
-  LineChartData _buildChartData(List<dynamic> data, AppSettings? settings, bool isDayGraph, {required bool showLeftTitles}) {
-    double maxY = settings?.cmdMaxGauge ?? 250;
+  Widget _buildGraphTypeToggle(WidgetRef ref, String type, bool isActive, Color activeColor) {
+    return GestureDetector(
+      onTap: () => ref.read(graphTypeProvider.notifier).state = type,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? activeColor : Colors.grey.shade300,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              type == 'KVA' ? Icons.arrow_drop_up :Icons.arrow_drop_up,
+              color: isActive ? Colors.white : Colors.grey,
+              size:17,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              type == 'KVA' ? 'KVA (CMD)' : 'KW (Power)',
+              style: TextStyle(
+                color: isActive ? Colors.white : Colors.black54,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  LineChartData _buildChartData(List<dynamic> data, AppSettings? settings, bool isDayGraph, String selectedType, {required bool showLeftTitles}) {
+    double maxY = 250;
+    double limitY = 104;
+    Color themeColor = Colors.blue;
+
+    if (selectedType == 'KW') {
+      maxY = settings?.powerMaxGauge ?? 250;
+      limitY = settings?.powerLimit ?? 104;
+      themeColor = Colors.green;
+    } else {
+      maxY = settings?.cmdMaxGauge ?? 250;
+      limitY = settings?.cmdLimit ?? 104;
+      themeColor = Colors.blue;
+    }
     if (maxY < 10) maxY = 250;
 
     return LineChartData(
@@ -699,14 +670,23 @@ class DevicePage extends ConsumerWidget {
       maxY: maxY,
       lineTouchData: LineTouchData(
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (spot) => Colors.blue.withValues(alpha: 0.8),
+          getTooltipColor: (spot) => themeColor.withValues(alpha: 0.8),
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
-              // Only show tooltip for the first bar (KVA)
-              if (spot.barIndex == 0) {
+              int index = spot.x.toInt();
+              if (index >= 0 && index < data.length) {
+                final item = data[index];
+                final timestamp = item['timestamp'];
+                String timeStr = '';
+                if (timestamp != null) {
+                  final date = DateTime.parse(timestamp).toLocal();
+                  timeStr = isDayGraph
+                      ? "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}"
+                      : "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
+                }
                 return LineTooltipItem(
-                  '${spot.y.toStringAsFixed(2)} KVA',
-                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  '${spot.y.toStringAsFixed(2)} $selectedType\nTime: $timeStr',
+                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                 );
               }
               return null;
@@ -726,7 +706,7 @@ class DevicePage extends ConsumerWidget {
       extraLinesData: ExtraLinesData(
         horizontalLines: [
           HorizontalLine(
-            y: settings?.cmdLimit ?? 104,
+            y: limitY,
             color: Colors.red.withValues(alpha: 0.4),
             strokeWidth: 2,
             dashArray: [5, 5],
@@ -752,7 +732,7 @@ class DevicePage extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: showLeftTitles,
             reservedSize: 40,
-            interval: 50, // Force labels at 50, 100, 150, etc.
+            interval: maxY >= 500 ? 100 : 50,
             getTitlesWidget: (value, meta) => SideTitleWidget(
               meta: meta,
               child: Text(
@@ -817,64 +797,177 @@ class DevicePage extends ConsumerWidget {
       ),
       borderData: FlBorderData(show: false),
       lineBarsData: [
-        LineChartBarData(
-          spots: data
-              .asMap()
-              .entries
-              .map(
-                (e) => FlSpot(
-                  e.key.toDouble(),
-                  ((e.value['KVA'] ?? 0) as num).toDouble(),
-                ),
-              )
-              .toList(),
-          isCurved: true,
-          color: Colors.blue.withValues(alpha: 0.7),
-          barWidth: 1.5,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: Colors.blue.withValues(alpha: 0.1),
+        if (selectedType == 'KVA')
+          LineChartBarData(
+            spots: data
+                .asMap()
+                .entries
+                .map(
+                  (e) => FlSpot(
+                    e.key.toDouble(),
+                    ((e.value['KVA'] ?? 0) as num).toDouble(),
+                  ),
+                )
+                .toList(),
+            isCurved: true,
+            color: Colors.blue.withValues(alpha: 0.7),
+            barWidth: 1.5,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.blue.withValues(alpha: 0.1),
+            ),
           ),
-        ),
-        LineChartBarData(
-          spots: data
-              .asMap()
-              .entries
-              .map(
-                (e) => FlSpot(
-                  e.key.toDouble(),
-                  ((e.value['KW'] ?? 0) as num).toDouble(),
-                ),
-              )
-              .toList(),
-          isCurved: true,
-          color: Colors.green.withValues(alpha: 0.7),
-          barWidth: 1.5,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: Colors.green.withValues(alpha: 0.1),
+        if (selectedType == 'KW')
+          LineChartBarData(
+            spots: data
+                .asMap()
+                .entries
+                .map(
+                  (e) => FlSpot(
+                    e.key.toDouble(),
+                    ((e.value['KW'] ?? 0) as num).toDouble(),
+                  ),
+                )
+                .toList(),
+            isCurved: true,
+            color: Colors.green.withValues(alpha: 0.7),
+            barWidth: 1.5,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.green.withValues(alpha: 0.1),
+            ),
           ),
-        ),
       ],
     );
   }
 
-  Widget _buildLegend(Color color, String text) {
-    return Row(
-      children: [
-        Icon(Icons.change_history, color: color, size: 12),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.black54,
+  Widget _buildOverviewCard({
+    required String title,
+    required Color backgroundColor,
+    required Color textColor,
+    required List<Widget> children,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: textColor,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridMetricTile({
+    required String label,
+    required String value,
+    required Color labelColor,
+    required Color valueColor,
+    String? subtitle,
+    VoidCallback? onTap,
+    Widget? icon,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: onTap != null
+                ? Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 1.5)
+                : Border.all(color: Colors.grey.withValues(alpha: 0.05), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    icon,
+                    const SizedBox(width: 4),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 9.2,
+                        fontWeight: FontWeight.w900,
+                        color: labelColor.withValues(alpha: 0.6),
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: valueColor,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                ),
+              ),
+              if (subtitle != null && subtitle.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

@@ -8,7 +8,7 @@ import '../models/meter_data.dart';
 
 class ApiService {
   // Using 10.0.2.2 for Android Emulator, localhost for others
-  static const String _defaultIP = '13.233.76.8';
+  static const String _defaultIP = '10.243.29.35';
   static const String _envIP = String.fromEnvironment(
     'API_IP',
     defaultValue: _defaultIP,
@@ -124,12 +124,31 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return (data['todayKWh'] ?? 0).toDouble();
+        return (data['todayKWh'] ?? 0.0).toDouble();
       }
     } catch (e) {
       debugPrint('Error fetching today usage: $e');
     }
     return 0.0;
+  }
+
+  Future<Map<String, double>> getTodayDetailedUsage(String deviceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/today-usage?deviceId=$deviceId'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'todayKWh': (data['todayKWh'] ?? 0.0).toDouble(),
+          'todayKVAh': (data['todayKVAh'] ?? 0.0).toDouble(),
+        };
+      }
+    } catch (e) {
+      debugPrint('Error fetching today detailed usage: $e');
+    }
+    return {'todayKWh': 0.0, 'todayKVAh': 0.0};
   }
 
   Future<List<dynamic>> getHistory(String type, String deviceId) async {
@@ -361,6 +380,33 @@ class ApiService {
       debugPrint('Error fetching range usage: $e');
     }
     return 0.0;
+  }
+
+  Future<Map<String, double>> getRangeDetailedUsage(
+    String deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    try {
+      final fromStr = from.toIso8601String();
+      final toStr = to.toIso8601String();
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/api/analysis/range-usage?deviceId=$deviceId&fromDate=$fromStr&toDate=$toStr',
+        ),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'totalKWhConsumed': (data['totalKWhConsumed'] ?? 0.0).toDouble(),
+          'totalKVaConsumed': (data['totalKVaConsumed'] ?? 0.0).toDouble(),
+        };
+      }
+    } catch (e) {
+      debugPrint('Error fetching range detailed usage: $e');
+    }
+    return {'totalKWhConsumed': 0.0, 'totalKVaConsumed': 0.0};
   }
 
   Future<List<dynamic>> getMonthlyUsage(String deviceId) async {
