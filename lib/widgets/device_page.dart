@@ -63,6 +63,20 @@ class DevicePage extends ConsumerWidget {
     }
   }
 
+  String _formatOfflineTime(DateTime? timestamp) {
+    if (timestamp == null) return 'OFFLINE';
+    try {
+      final localTime = timestamp.toLocal();
+      final now = DateTime.now();
+      if (localTime.year == now.year && localTime.month == now.month && localTime.day == now.day) {
+        return 'OFFLINE since ${DateFormat('HH:mm').format(localTime)}';
+      }
+      return 'OFFLINE since ${DateFormat('dd/MM HH:mm').format(localTime)}';
+    } catch (_) {
+      return 'OFFLINE';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mqttData = ref.watch(mqttDataProvider(deviceId));
@@ -111,20 +125,55 @@ class DevicePage extends ConsumerWidget {
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                if ((userProfile.value?['assignedDevices'] as List<dynamic>? ??
-                            [])
-                        .length >
-                    1) ...[
-                  Text(
-                    'Device ID: $deviceId',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if ((userProfile.value?['assignedDevices'] as List<dynamic>? ?? []).length > 1) ...[
+                      Text(
+                        'Device ID: $deviceId',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: data.status == 'offline' ? Colors.red[50] : Colors.green[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: data.status == 'offline' ? Colors.red.shade200 : Colors.green.shade200,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: data.status == 'offline' ? Colors.red : Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            data.status == 'offline' ? _formatOfflineTime(data.timestamp) : 'ONLINE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: data.status == 'offline' ? Colors.red[800] : Colors.green[800],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                  ],
+                ),
+                const SizedBox(height: 20),
                 if (alertState.activeAlerts.isNotEmpty)
                   Column(
                     children: [
@@ -199,30 +248,65 @@ class DevicePage extends ConsumerWidget {
                     ],
                   ),
                 const SizedBox(height: 10),
-                // Gauges Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildGaugeWithLimit(
-                      context,
-                      ref,
-                      'CMD',
-                      data.kVATotal,
-                      settings?.cmdMaxGauge ?? 250,
-                      settings?.cmdLimit ?? 104,
-                      'kVA',
+                if (data.status == 'offline')
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
-                    _buildGaugeWithLimit(
-                      context,
-                      ref,
-                      'POWER',
-                      data.kWTotal,
-                      settings?.powerMaxGauge ?? 250,
-                      settings?.powerLimit ?? 104,
-                      'kW',
+                    child: Column(
+                      children: [
+                        Icon(Icons.cloud_off, size: 48, color: Colors.grey[400]),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Live Telemetry Unavailable',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          data.timestamp != null
+                              ? 'Offline since ${DateFormat('dd/MM HH:mm').format(data.timestamp!)}. Showing cached summaries.'
+                              : 'The device is currently offline. Showing cached summaries.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildGaugeWithLimit(
+                        context,
+                        ref,
+                        'CMD',
+                        data.kVATotal,
+                        settings?.cmdMaxGauge ?? 250,
+                        settings?.cmdLimit ?? 104,
+                        'kVA',
+                      ),
+                      _buildGaugeWithLimit(
+                        context,
+                        ref,
+                        'POWER',
+                        data.kWTotal,
+                        settings?.powerMaxGauge ?? 250,
+                        settings?.powerLimit ?? 104,
+                        'kW',
+                      ),
+                    ],
+                  ),
                 
                 const SizedBox(height: 25),
                 // Power Factor Metrics Card (2x2 grid style using Rows)
@@ -235,7 +319,7 @@ class DevicePage extends ConsumerWidget {
                       children: [
                         _buildGridMetricTile(
                           label: 'LIVE PF',
-                          value: data.pfAvg.toStringAsFixed(3),
+                          value: data.status == 'offline' ? 'Offline' : data.pfAvg.toStringAsFixed(3),
                           labelColor: Colors.black87,
                           valueColor: Colors.orange[900]!,
                         ),
