@@ -72,6 +72,8 @@ class DevicePage extends ConsumerWidget {
     final isDayGraph = ref.watch(isDayGraphProvider);
     final graphData = ref.watch(graphDataProvider(deviceId));
     final todayKwh = ref.watch(todayKwhProvider(deviceId));
+    final todayKva = ref.watch(todayPeriodStatsProvider(deviceId));
+    final consumedKva = ref.watch(periodStatsProvider(deviceId));
     final selectedDate = ref.watch(selectedDateProvider);
     final alertState = ref.watch(alertManagerProvider(deviceId));
     final userProfile = ref.watch(userProfileProvider);
@@ -96,6 +98,8 @@ class DevicePage extends ConsumerWidget {
             ref.refresh(graphDataProvider(deviceId).future),
             ref.refresh(consumedKwhProvider(deviceId).future),
             ref.refresh(todayKwhProvider(deviceId).future),
+            ref.refresh(todayPeriodStatsProvider(deviceId).future),
+            ref.refresh(periodStatsProvider(deviceId).future),
           ]);
         },
         child: SingleChildScrollView(
@@ -217,80 +221,13 @@ class DevicePage extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 25),
-                // Metrics Section
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA5E6C9),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildMetricCard(
-                              'LIVE KVA',
-                              data.kVATotal.toStringAsFixed(2),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildMetricCard(
-                              'TOTAL UNIT READINGS',
-                              data.kWh.toStringAsFixed(1),
-                              //footer: const Text('(Unit Reading)', style: TextStyle(fontSize: 10, color: Colors.black45)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildMetricCard(
-                              'POWER FACTOR',
-                              data.pfAvg.toStringAsFixed(3),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildMetricCard(
-                              'P.F LIMIT',
-                              settings?.pfLimit.toStringAsFixed(3) ?? '0.900',
-                              footer: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Limit: ${settings?.pfLimit.toStringAsFixed(2) ?? "0.90"}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.black45,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => _navToSettings(
-                                context,
-                                ref,
-                                'PF limit',
-                                'PF',
-                                settings?.pfLimit ?? 0.9,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                
                 const SizedBox(height: 25),
                 // New Consumption Box
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFFA5E6C9),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: Colors.teal.withValues(alpha: 0.1),
@@ -303,43 +240,187 @@ class DevicePage extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard(
+                              'TODAY UNITS',
+                              todayKwh.when(
+                                data: (d) => d.toStringAsFixed(1),
+                                error: (_, _) => 'Error',
+                                loading: () => '...',
+                              ),
+                              footer: const Text(
+                                '12AM - Now',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'CONSUMED UNITS',
+                              consumedKwh.when(
+                                data: (d) => d.toStringAsFixed(1),
+                                error: (_, _) => 'Error',
+                                loading: () => '...',
+                              ),
+                              footer: Text(
+                                'From ${DateFormat('dd MMM').format(selectedDate)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              onTap: () => _selectDate(context, ref),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard(
+                              'TODAY KVA',
+                              todayKva.when(
+                                data: (stats) {
+                                  final val = stats?['kva']?['max'];
+                                  return val != null ? val.toStringAsFixed(2) : '0.00';
+                                },
+                                error: (_, _) => 'Error',
+                                loading: () => '...',
+                              ),
+                              footer: todayKva.when(
+                                data: (stats) {
+                                  final maxTimeStr = stats?['kva']?['maxTime'];
+                                  if (maxTimeStr != null) {
+                                    final dateTime = DateTime.parse(maxTimeStr).toLocal();
+                                    return Text(
+                                      'Peak: ${DateFormat('hh:mm a').format(dateTime)}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black45,
+                                      ),
+                                    );
+                                  }
+                                  return const Text(
+                                    '12AM - Now',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.black45,
+                                    ),
+                                  );
+                                },
+                                error: (_, _) => const Text(
+                                  'Error',
+                                  style: TextStyle(fontSize: 10, color: Colors.red),
+                                ),
+                                loading: () => const Text(
+                                  '...',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'CONSUMED KVA',
+                              consumedKva.when(
+                                data: (stats) {
+                                  final val = stats?['kva']?['max'];
+                                  return val != null ? val.toStringAsFixed(2) : '0.00';
+                                },
+                                error: (_, _) => 'Error',
+                                loading: () => '...',
+                              ),
+                              footer: consumedKva.when(
+                                data: (stats) {
+                                  final maxTimeStr = stats?['kva']?['maxTime'];
+                                  if (maxTimeStr != null) {
+                                    final dateTime = DateTime.parse(maxTimeStr).toLocal();
+                                    return Text(
+                                      'Peak: ${DateFormat('dd MMM, hh:mm a').format(dateTime)}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.blue[700],
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  }
+                                  return Text(
+                                    'From ${DateFormat('dd MMM').format(selectedDate)}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                },
+                                error: (_, _) => const Text(
+                                  'Error',
+                                  style: TextStyle(fontSize: 10, color: Colors.red),
+                                ),
+                                loading: () => const Text(
+                                  '...',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ),
+                              onTap: () => _selectDate(context, ref),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 25),
+                // Metrics Section
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                   child: Row(
                     children: [
                       Expanded(
                         child: _buildMetricCard(
-                          'TODAY UNITS',
-                          todayKwh.when(
-                            data: (d) => d.toStringAsFixed(1),
-                            error: (_, _) => 'Error',
-                            loading: () => '...',
-                          ),
-                          footer: const Text(
-                            '12AM - Now',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.black45,
-                            ),
-                          ),
+                          'POWER FACTOR',
+                          data.pfAvg.toStringAsFixed(3),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildMetricCard(
-                          'CONSUMED UNITS',
-                          consumedKwh.when(
-                            data: (d) => d.toStringAsFixed(1),
-                            error: (_, _) => 'Error',
-                            loading: () => '...',
+                          'P.F LIMIT',
+                          settings?.pfLimit.toStringAsFixed(3) ?? '0.900',
+                          footer: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Limit: ${settings?.pfLimit.toStringAsFixed(2) ?? "0.90"}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                            ],
                           ),
-                          footer: Text(
-                            'From ${DateFormat('dd MMM').format(selectedDate)}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.bold,
-                            ),
+                          onTap: () => _navToSettings(
+                            context,
+                            ref,
+                            'PF limit',
+                            'PF',
+                            settings?.pfLimit ?? 0.9,
                           ),
-                          onTap: () => _selectDate(context, ref),
                         ),
                       ),
                     ],

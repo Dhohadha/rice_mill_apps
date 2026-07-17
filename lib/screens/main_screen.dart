@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rice_mill/services/providers.dart';
 import 'monitoring_screen.dart';
+import 'capacitors_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -14,6 +15,7 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen> {
   final List<Widget> _screens = [
     const MonitoringScreen(),
+    const CapacitorsScreen(),
     const ProfileScreen(),
   ];
 
@@ -78,24 +80,26 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          onTap: (index) => ref.read(tabIndexProvider.notifier).state = index,
+        child: NavigationBar(
+          selectedIndex: currentIndex,
+          onDestinationSelected: (index) => ref.read(tabIndexProvider.notifier).state = index,
           backgroundColor: Colors.white,
-          selectedItemColor: Colors.teal,
-          unselectedItemColor: Colors.grey,
-          showUnselectedLabels: true,
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined),
-              activeIcon: Icon(Icons.dashboard),
-              label: 'Monitoring',
+          indicatorColor: const Color(0xFFA5E6C9),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'home',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
+              icon: Icon(Icons.bolt),
+              selectedIcon: Icon(Icons.bolt),
+              label: 'Capacitors',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
+              selectedIcon: Icon(Icons.person),
+              label: 'Account',
             ),
           ],
         ),

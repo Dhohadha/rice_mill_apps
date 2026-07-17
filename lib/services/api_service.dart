@@ -21,7 +21,7 @@ class ApiService {
         return 'http://$_envIP:7007';
       }
     } catch (_) {}
-    return 'http://localhost:70077';
+    return 'http://localhost:7007';
   }
 
   Future<Map<String, String>> _getHeaders() async {
