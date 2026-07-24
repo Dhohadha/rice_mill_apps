@@ -157,6 +157,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
               },
             ),
+            _buildSettingTile(
+              icon: Icons.mail_outline,
+              title: 'Email Reports Setup',
+              subtitle: 'Daily PDF graph reports & Excel dataset logs',
+              onTap: () => _showEmailReportsModal(context),
+            ),
             _buildSettingTileWithSwitch(
               icon: _isAlarmSoundEnabled ? Icons.volume_up : Icons.volume_off,
               title: 'Alarm Sound',
@@ -368,6 +374,295 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _showEmailReportsModal(BuildContext context) {
+    bool isChecking = true;
+    bool isEnabled = false;
+    bool isSaving = false;
+    bool isTesting = false;
+    String reportEmail = '';
+    
+    final emailController = TextEditingController();
+    final defaultEmail = ref.read(authServiceProvider).currentUser?.email ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          if (isChecking) {
+            ref.read(apiServiceProvider).getEmailReportSettings().then((settings) {
+              if (context.mounted) {
+                setModalState(() {
+                  isEnabled = settings?['isEmailReportEnabled'] == true;
+                  reportEmail = settings?['reportEmail'] ?? '';
+                  emailController.text = reportEmail;
+                  isChecking = false;
+                });
+              }
+            });
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24.0,
+              right: 24.0,
+              top: 24.0,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.teal[50],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.mail_outline, color: Colors.teal, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Email Reports Setup',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Automated daily export of energy reports',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  if (isChecking) ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40.0),
+                        child: CircularProgressIndicator(color: Colors.teal),
+                      ),
+                    ),
+                  ] else ...[
+                    // Status Container
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isEnabled ? Colors.green[50] : Colors.amber[50],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isEnabled ? Colors.green.shade200 : Colors.amber.shade200,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isEnabled ? Icons.check_circle : Icons.warning_amber_rounded,
+                            color: isEnabled ? Colors.green[700] : Colors.amber[800],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isEnabled ? 'Daily Reports Active' : 'Daily Reports Off',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isEnabled ? Colors.green[900] : Colors.amber[900],
+                                  ),
+                                ),
+                                Text(
+                                  isEnabled
+                                      ? 'Energy report PDF & Excel raw data will be sent daily at midnight.'
+                                      : 'Enable daily email reports to keep track of device analytics.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isEnabled ? Colors.green[800] : Colors.amber[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Switch Tile
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Enable Automated Daily Reports',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Send collective multi-device reports every night',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: isEnabled,
+                      activeColor: Colors.teal,
+                      onChanged: (val) {
+                        setModalState(() {
+                          isEnabled = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Custom Email Input
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Recipient Email Address',
+                        hintText: defaultEmail,
+                        helperText: 'Leave blank to send to account email ($defaultEmail)',
+                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.teal),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Save / Test Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              icon: isTesting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(color: Colors.teal, strokeWidth: 1.5),
+                                    )
+                                  : const Icon(Icons.email_outlined, size: 18),
+                              label: Text(
+                                isTesting ? 'SENDING...' : 'TEST EMAIL',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.teal,
+                                side: const BorderSide(color: Colors.teal),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: isTesting || isSaving
+                                  ? null
+                                  : () async {
+                                      setModalState(() => isTesting = true);
+                                      try {
+                                        // Save current settings first so test runs with up-to-date recipient address
+                                        final customEmail = emailController.text.trim();
+                                        await ref.read(apiServiceProvider).saveEmailReportSettings(isEnabled, customEmail);
+                                        
+                                        final result = await ref
+                                            .read(apiServiceProvider)
+                                            .triggerTestEmailExport('RICE_MILL_001');
+
+                                        if (context.mounted) {
+                                          if (result != null && result['success'] == true) {
+                                            final isDemo = result['demoMode'] == true;
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(isDemo
+                                                    ? '🎉 Report generated locally! Check server/exports/ folder.'
+                                                    : '🎉 Test report sent successfully to recipient email!'),
+                                                backgroundColor: Colors.green,
+                                              ),
+                                            );
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Note: ${result?['reason'] ?? result?['error'] ?? 'Verify credentials'}'),
+                                                backgroundColor: Colors.orange,
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      } finally {
+                                        if (context.mounted) {
+                                          setModalState(() => isTesting = false);
+                                        }
+                                      }
+                                    },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              onPressed: isSaving || isTesting
+                                  ? null
+                                  : () async {
+                                      setModalState(() => isSaving = true);
+                                      try {
+                                        final customEmail = emailController.text.trim();
+                                        final success = await ref
+                                            .read(apiServiceProvider)
+                                            .saveEmailReportSettings(isEnabled, customEmail);
+
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(success
+                                                  ? '✅ Email report settings saved successfully.'
+                                                  : '❌ Failed to save settings.'),
+                                              backgroundColor: success ? Colors.green : Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        if (context.mounted) {
+                                          setModalState(() => isSaving = false);
+                                        }
+                                      }
+                                    },
+                              child: isSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    )
+                                  : const Text('SAVE SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildInvitationItem(BuildContext context, Map<String, dynamic> invite) {
     final ownerEmail = invite['ownerEmail'];
     final isProcessing = _processingInvites.contains(ownerEmail);
@@ -435,6 +730,4 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
-
-
 }

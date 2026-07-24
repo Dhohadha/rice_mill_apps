@@ -440,4 +440,56 @@ class ApiService {
     }
     return null;
   }
+
+  // --- Email Report Integration Methods ---
+
+  Future<Map<String, dynamic>?> getEmailReportSettings() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/email-reports/status'),
+        headers: await _getHeaders(),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error getting email report settings: $e');
+    }
+    return null;
+  }
+
+  Future<bool> saveEmailReportSettings(bool isEnabled, String? reportEmail) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/email-reports/save'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'isEmailReportEnabled': isEnabled,
+          'reportEmail': reportEmail,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Error saving email report settings: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> triggerTestEmailExport(String deviceId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/email-reports/test-export'),
+        headers: await _getHeaders(),
+        body: jsonEncode({'deviceId': deviceId}),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        return {'success': false, 'error': response.body};
+      }
+    } catch (e) {
+      debugPrint('Error triggering test email export: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

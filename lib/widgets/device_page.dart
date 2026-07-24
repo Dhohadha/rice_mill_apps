@@ -405,7 +405,7 @@ class DevicePage extends ConsumerWidget {
                     Row(
                       children: [
                         _buildGridMetricTile(
-                          label: 'TODAY CONSUMED KVA',
+                          label: 'TODAY CONSUMED KVAH',
                           value: todayDetailedUsage.when(
                             data: (d) => d['todayKVAh']?.toStringAsFixed(1) ?? '0.0',
                             error: (_, _) => 'Error',
@@ -416,7 +416,7 @@ class DevicePage extends ConsumerWidget {
                         ),
                         const SizedBox(width: 10),
                         _buildGridMetricTile(
-                          label: 'MONTHLY CONSUMED KVA',
+                          label: 'MONTHLY CONSUMED KVAH',
                           value: monthlyDetailedUsage.when(
                             data: (d) => d['totalKVaConsumed']?.toStringAsFixed(1) ?? '0.0',
                             error: (_, _) => 'Error',
@@ -593,14 +593,7 @@ class DevicePage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 15),
                 // Interactive Graph Toggle under the Graph
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildGraphTypeToggle(ref, 'KVA', graphType == 'KVA', Colors.blue),
-                    const SizedBox(width: 20),
-                    _buildGraphTypeToggle(ref, 'KW', graphType == 'KW', Colors.green),
-                  ],
-                ),
+                _buildSliderGraphToggle(ref, graphType),
                 const SizedBox(height: 20),
               ],
             ),
@@ -697,37 +690,132 @@ class DevicePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildGraphTypeToggle(WidgetRef ref, String type, bool isActive, Color activeColor) {
-    return GestureDetector(
-      onTap: () => ref.read(graphTypeProvider.notifier).state = type,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? activeColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? activeColor : Colors.grey.shade300,
-            width: 1.5,
+  Widget _buildSliderGraphToggle(WidgetRef ref, String currentType) {
+    // Target alignment & color for the sliding background thumb
+    Alignment thumbAlignment;
+    Color thumbColor;
+    if (currentType == 'KVA') {
+      thumbAlignment = Alignment.centerLeft;
+      thumbColor = Colors.blue.shade600;
+    } else if (currentType == 'BOTH') {
+      thumbAlignment = Alignment.center;
+      thumbColor = Colors.indigo.shade600;
+    } else {
+      thumbAlignment = Alignment.centerRight;
+      thumbColor = Colors.green.shade600;
+    }
+
+    return Container(
+      width: 320,
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              type == 'KVA' ? Icons.arrow_drop_up :Icons.arrow_drop_up,
-              color: isActive ? Colors.white : Colors.grey,
-              size:17,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              type == 'KVA' ? 'KVA (CMD)' : 'KW (Power)',
-              style: TextStyle(
-                color: isActive ? Colors.white : Colors.black54,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Sliding Background Pill
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            alignment: thumbAlignment,
+            child: FractionallySizedBox(
+              widthFactor: 0.33,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      thumbColor,
+                      thumbColor.withValues(alpha: 0.85),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: thumbColor.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
+          // Toggle Buttons Row
+          Row(
+            children: [
+              _buildSliderOption(
+                ref: ref,
+                type: 'KVA',
+                label: 'KVA',
+                icon: Icons.bolt,
+                isSelected: currentType == 'KVA',
+              ),
+              _buildSliderOption(
+                ref: ref,
+                type: 'BOTH',
+                label: 'BOTH',
+                icon: Icons.analytics,
+                isSelected: currentType == 'BOTH',
+              ),
+              _buildSliderOption(
+                ref: ref,
+                type: 'KW',
+                label: 'KW',
+                icon: Icons.power,
+                isSelected: currentType == 'KW',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliderOption({
+    required WidgetRef ref,
+    required String type,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref.read(graphTypeProvider.notifier).state = type,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : Colors.grey.shade600,
+                size: 15,
+              ),
+              const SizedBox(width: 4),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                child: Text(label),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -735,16 +823,18 @@ class DevicePage extends ConsumerWidget {
 
   LineChartData _buildChartData(List<dynamic> data, AppSettings? settings, bool isDayGraph, String selectedType, {required bool showLeftTitles}) {
     double maxY = 250;
-    double limitY = 104;
     Color themeColor = Colors.blue;
 
     if (selectedType == 'KW') {
       maxY = settings?.powerMaxGauge ?? 250;
-      limitY = settings?.powerLimit ?? 104;
       themeColor = Colors.green;
+    } else if (selectedType == 'BOTH') {
+      final kvaMax = settings?.cmdMaxGauge ?? 250;
+      final kwMax = settings?.powerMaxGauge ?? 250;
+      maxY = kvaMax > kwMax ? kvaMax : kwMax;
+      themeColor = Colors.indigo;
     } else {
       maxY = settings?.cmdMaxGauge ?? 250;
-      limitY = settings?.cmdLimit ?? 104;
       themeColor = Colors.blue;
     }
     if (maxY < 10) maxY = 250;
@@ -754,7 +844,14 @@ class DevicePage extends ConsumerWidget {
       maxY: maxY,
       lineTouchData: LineTouchData(
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (spot) => themeColor.withValues(alpha: 0.8),
+          getTooltipColor: (spot) {
+            if (selectedType == 'BOTH') {
+              return spot.barIndex == 0
+                  ? Colors.blue.shade800.withValues(alpha: 0.9)
+                  : Colors.green.shade800.withValues(alpha: 0.9);
+            }
+            return themeColor.withValues(alpha: 0.8);
+          },
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
               int index = spot.x.toInt();
@@ -768,8 +865,12 @@ class DevicePage extends ConsumerWidget {
                       ? "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}"
                       : "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
                 }
+                String spotType = selectedType;
+                if (selectedType == 'BOTH') {
+                  spotType = spot.barIndex == 0 ? 'KVA' : 'KW';
+                }
                 return LineTooltipItem(
-                  '${spot.y.toStringAsFixed(2)} $selectedType\nTime: $timeStr',
+                  '${spot.y.toStringAsFixed(2)} $spotType\nTime: $timeStr',
                   const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                 );
               }
@@ -789,22 +890,40 @@ class DevicePage extends ConsumerWidget {
       ),
       extraLinesData: ExtraLinesData(
         horizontalLines: [
-          HorizontalLine(
-            y: limitY,
-            color: Colors.red.withValues(alpha: 0.4),
-            strokeWidth: 2,
-            dashArray: [5, 5],
-            label: HorizontalLineLabel(
-              show: true,
-              alignment: Alignment.topRight,
-              labelResolver: (line) => 'Limit',
-              style: TextStyle(
-                color: Colors.red.withValues(alpha: 0.8),
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
+          if (selectedType == 'KVA' || selectedType == 'BOTH')
+            HorizontalLine(
+              y: settings?.cmdLimit ?? 104,
+              color: Colors.red.withValues(alpha: 0.4),
+              strokeWidth: 2,
+              dashArray: [5, 5],
+              label: HorizontalLineLabel(
+                show: true,
+                alignment: Alignment.topRight,
+                labelResolver: (line) => selectedType == 'BOTH' ? 'KVA Limit' : 'Limit',
+                style: TextStyle(
+                  color: Colors.red.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
+          if (selectedType == 'KW' || selectedType == 'BOTH')
+            HorizontalLine(
+              y: settings?.powerLimit ?? 104,
+              color: Colors.orange.withValues(alpha: 0.4),
+              strokeWidth: 2,
+              dashArray: [5, 5],
+              label: HorizontalLineLabel(
+                show: true,
+                alignment: selectedType == 'BOTH' ? Alignment.topLeft : Alignment.topRight,
+                labelResolver: (line) => selectedType == 'BOTH' ? 'KW Limit' : 'Limit',
+                style: TextStyle(
+                  color: Colors.orange.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
       titlesData: FlTitlesData(
@@ -844,7 +963,11 @@ class DevicePage extends ConsumerWidget {
               final date = DateTime.parse(timestamp).toLocal();
 
               bool isHourTransition = false;
-              if (index > 0) {
+              if (index == 0) {
+                if (date.hour % 4 == 0) {
+                  isHourTransition = true;
+                }
+              } else {
                 final prevTimestamp = data[index - 1]['timestamp'];
                 if (prevTimestamp != null) {
                   final prevDate = DateTime.parse(prevTimestamp).toLocal();
@@ -881,7 +1004,7 @@ class DevicePage extends ConsumerWidget {
       ),
       borderData: FlBorderData(show: false),
       lineBarsData: [
-        if (selectedType == 'KVA')
+        if (selectedType == 'KVA' || selectedType == 'BOTH')
           LineChartBarData(
             spots: data
                 .asMap()
@@ -899,10 +1022,10 @@ class DevicePage extends ConsumerWidget {
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.blue.withValues(alpha: 0.1),
+              color: Colors.blue.withValues(alpha: selectedType == 'BOTH' ? 0.03 : 0.1),
             ),
           ),
-        if (selectedType == 'KW')
+        if (selectedType == 'KW' || selectedType == 'BOTH')
           LineChartBarData(
             spots: data
                 .asMap()
@@ -920,7 +1043,7 @@ class DevicePage extends ConsumerWidget {
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.green.withValues(alpha: 0.1),
+              color: Colors.green.withValues(alpha: selectedType == 'BOTH' ? 0.03 : 0.1),
             ),
           ),
       ],
@@ -1008,7 +1131,7 @@ class DevicePage extends ConsumerWidget {
                     child: Text(
                       label,
                       style: TextStyle(
-                        fontSize: 9.2,
+                        fontSize: 9,
                         fontWeight: FontWeight.w900,
                         color: labelColor.withValues(alpha: 0.6),
                         letterSpacing: 0.5,

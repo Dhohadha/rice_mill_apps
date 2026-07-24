@@ -274,7 +274,18 @@ final graphDataProvider = FutureProvider.family<List<dynamic>, String>((ref, dev
   ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   final isDay = ref.watch(isDayGraphProvider);
-  return await api.getHistory(isDay ? 'day' : 'hour', deviceId);
+  final rawData = await api.getHistory(isDay ? 'day' : 'hour', deviceId);
+  if (isDay) {
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    return rawData.where((item) {
+      final timestamp = item['timestamp'];
+      if (timestamp == null) return false;
+      final date = DateTime.parse(timestamp).toLocal();
+      return date.isAfter(todayMidnight) || date.isAtSameMomentAs(todayMidnight);
+    }).toList();
+  }
+  return rawData;
 });
 
 // Analysis: Monthly Usage Provider
