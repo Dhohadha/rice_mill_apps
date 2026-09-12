@@ -88,14 +88,32 @@ class FCMService {
           payload: alertId,
         );
 
-        // Play the loud alarm sound explicitly for foreground alerts only if not an invite
+        // Play the loud alarm sound explicitly for foreground alerts
         AlarmService().playAlarm();
+
+        // Show full screen alarm page
+        showGlobalAlarmScreen(
+          title: title,
+          body: body,
+          alertId: alertId,
+        );
       }
     });
 
     // App opened from background/terminated via notification
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('App opened from notification!');
+      String title = message.data['title'] ?? '⚠️ Grid Pulse Alert';
+      String body = message.data['body'] ?? 'Limit exceeded';
+      String alertId = message.data['alertId'] ?? 'ALARM_ID';
+
+      if (alertId != 'INVITE') {
+        showGlobalAlarmScreen(
+          title: title,
+          body: body,
+          alertId: alertId,
+        );
+      }
     });
 
     // Listen to Auth State Changes to register token immediately upon login

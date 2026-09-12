@@ -12,10 +12,12 @@ import 'screens/login_screen.dart';
 import 'screens/not_registered_screen.dart';
 import 'screens/access_revoked_screen.dart';
 import 'screens/loading_screen.dart';
+import 'screens/alarm_screen.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/providers.dart';
 
+final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> _requestPermissions() async {
   if (Platform.isAndroid) {
@@ -25,6 +27,14 @@ Future<void> _requestPermissions() async {
       await Permission.notification.request();
     }
   }
+}
+
+void showGlobalAlarmScreen({String title = '⚠️ Threshold Alert!', String body = 'Critical condition detected.', String alertId = 'ALARM_ID'}) {
+  globalNavigatorKey.currentState?.push(
+    MaterialPageRoute(
+      builder: (_) => AlarmScreen(title: title, body: body, alertId: alertId),
+    ),
+  );
 }
 
 void main() async {
@@ -77,7 +87,6 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
-  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -97,9 +106,11 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
     notificationService.onNotificationTap = (payload) {
       if (payload == 'history') {
-        _navigatorKey.currentState?.push(
+        globalNavigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const NotificationsScreen()),
         );
+      } else if (payload != null && payload.isNotEmpty) {
+        showGlobalAlarmScreen(title: '⚠️ Critical Alert', body: 'Tap STOP to silence alarm', alertId: payload);
       }
     };
 
@@ -127,8 +138,11 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Grid Pulse',
-      navigatorKey: _navigatorKey,
+      navigatorKey: globalNavigatorKey,
       debugShowCheckedModeBanner: false,
+      routes: {
+        '/alarm': (context) => const AlarmScreen(),
+      },
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,

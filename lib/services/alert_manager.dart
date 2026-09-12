@@ -6,6 +6,7 @@ import 'alarm_service.dart';
 import 'providers.dart';
 import '../models/meter_data.dart';
 import '../models/app_settings.dart';
+import '../main.dart';
 
 class AlertState {
   final bool isAlarmPlaying;
@@ -115,6 +116,10 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     if (shouldTriggerAlarm && !state.isAlarmPlaying && !state.isAlarmStopped) {
       _alarmService.playAlarm();
       state = state.copyWith(isAlarmPlaying: true, isAlarmStopped: false, activeAlerts: currentAlerts);
+      showGlobalAlarmScreen(
+        title: '⚠️ Threshold Alert!',
+        body: currentAlerts.join('\n'),
+      );
     } else {
       if (currentAlerts.join(',') != state.activeAlerts.join(',')) {
         state = state.copyWith(activeAlerts: currentAlerts);
