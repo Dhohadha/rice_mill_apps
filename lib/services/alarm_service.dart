@@ -24,7 +24,11 @@ class AlarmService {
       }
 
       await _player.setReleaseMode(ReleaseMode.loop);
-      await _player.play(AssetSource('alarm.mp3'));
+      try {
+        await _player.play(AssetSource('alert fro ricemill.m4a'));
+      } catch (_) {
+        await _player.play(AssetSource('alarm.mp3'));
+      }
       _isPlaying = true;
     } catch (e) {
       debugPrint('❌ Error playing alarm: $e');
