@@ -4,11 +4,24 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <application
         android:label="Grid Pulse"
-        android:name="${applicationName}"
+        android:name=".RiceMillApplication"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/launcher_icon">
+        <service android:name=".AlarmSoundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />
+        <activity
+            android:name=".LockScreenAlarmActivity"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

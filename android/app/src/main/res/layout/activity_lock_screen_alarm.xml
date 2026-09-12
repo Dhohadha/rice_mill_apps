@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_alarm_gradient"
+    android:keepScreenOn="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="80dp">
+
+        <ImageView
+            android:id="@+id/tvAlertIcon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@mipmap/launcher_icon"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/tvCriticalAlert"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CRITICAL ALERT"
+            android:textColor="#EF5350"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:layout_marginTop="30dp" />
+
+        <TextView
+            android:id="@+id/tvAlertTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ALARM TRIGGERED"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:layout_marginTop="40dp"
+            android:gravity="center"
+            android:layout_marginHorizontal="30dp" />
+
+        <TextView
+            android:id="@+id/tvAlertBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Grid power threshold limit breached!"
+            android:textColor="#CCFFFFFF"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:layout_marginTop="20dp"
+            android:layout_marginHorizontal="40dp" />
+
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="240dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp">
+        
+        <View
+            android:id="@+id/btnStopPulse"
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/bg_stop_button_pulse" />
+
+        <FrameLayout
+            android:id="@+id/btnStopContainer"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:background="@drawable/bg_stop_button"
+            android:elevation="20dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_centerInParent="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="STOP"
+                android:textColor="#FFFFFF"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:layout_gravity="center" />
+        </FrameLayout>
+    </RelativeLayout>
+
+</RelativeLayout>
