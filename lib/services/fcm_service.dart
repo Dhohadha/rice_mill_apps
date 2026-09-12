@@ -30,6 +30,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       payload: alertId,
     );
   } else {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('latest_alarm_title', title);
+    await prefs.setString('latest_alarm_body', body);
+    await prefs.setBool('alarm_playing', true);
+    await prefs.setBool('isAlarmStopped', false);
+
     await notificationService.showThresholdAlert(
       id: 999, // New unified ID
       title: title,
@@ -90,7 +96,7 @@ class FCMService {
         );
 
         // Play the loud alarm sound explicitly for foreground alerts
-        AlarmService().playAlarm();
+        AlarmService().playAlarm(title: title, body: body);
 
         // Show full screen alarm page
         showGlobalAlarmScreen(

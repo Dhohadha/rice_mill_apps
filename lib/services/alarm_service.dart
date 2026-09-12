@@ -12,7 +12,7 @@ class AlarmService {
 
   bool get isPlaying => _isPlaying;
 
-  Future<void> playAlarm() async {
+  Future<void> playAlarm({String? title, String? body}) async {
     if (_isPlaying) return;
 
     try {
@@ -22,6 +22,11 @@ class AlarmService {
         debugPrint('🔇 Alarm sound is disabled in settings. Skipping play.');
         return;
       }
+
+      await prefs.setBool('alarm_playing', true);
+      await prefs.setBool('isAlarmStopped', false);
+      if (title != null) await prefs.setString('latest_alarm_title', title);
+      if (body != null) await prefs.setString('latest_alarm_body', body);
 
       await _player.setReleaseMode(ReleaseMode.loop);
       try {
@@ -36,9 +41,11 @@ class AlarmService {
   }
 
   Future<void> stopAlarm() async {
-    if (!_isPlaying) return;
-
     try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('alarm_playing', false);
+      await prefs.setBool('isAlarmStopped', true);
+
       await _player.stop();
       _isPlaying = false;
     } catch (e) {
