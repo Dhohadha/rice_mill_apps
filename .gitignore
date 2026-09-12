@@ -48,3 +48,10 @@ app.*.map.json
 server/node_modules/
 server/.env
 server/service_account_key.json
+
+# Release signing keys & properties
+**/android/app/key.properties
+**/android/key.properties
+*.jks
+*.keystore
+

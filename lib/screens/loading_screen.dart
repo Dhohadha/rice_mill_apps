@@ -65,11 +65,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                 ScaleTransition(
                   scale: _pulseAnimation,
                   child: Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withOpacity(0.15),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(color: Colors.white.withOpacity(0.25)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.teal.shade400.withOpacity(0.2),
@@ -78,17 +78,20 @@ class _LoadingScreenState extends State<LoadingScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.factory_rounded,
-                      size: 80,
-                      color: Colors.white,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/GPlogo.png',
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 40),
                 // App Title
                 const Text(
-                  'Rice Mill EMS',
+                  'Grid Pulse',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

@@ -17,11 +17,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final notificationService = NotificationService();
   await notificationService.init();
 
-  String title = message.data['title'] ?? '⚠️ Rice Mill Alert';
+  String title = message.data['title'] ?? '⚠️ Grid Pulse Alert';
   String body = message.data['body'] ?? 'Limit exceeded';
   String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-  if (alertId == 'INVITE' || alertId == 'PF') {
+  if (alertId == 'INVITE') {
     await notificationService.showNormalNotification(
       id: message.hashCode,
       title: title,
@@ -69,11 +69,11 @@ class FCMService {
       debugPrint('Message data: ${message.data}');
 
       // Extract title and body from data payload since we changed server to send data
-      String title = message.data['title'] ?? '⚠️ Rice Mill Alert';
+      String title = message.data['title'] ?? '⚠️ Grid Pulse Alert';
       String body = message.data['body'] ?? 'Limit exceeded';
       String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
-      if (alertId == 'INVITE' || alertId == 'PF') {
+      if (alertId == 'INVITE') {
         _notificationService.showNormalNotification(
           id: message.hashCode,
           title: title,

@@ -321,8 +321,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 TextField(
                   controller: millController,
                   decoration: InputDecoration(
-                    labelText: 'Rice Mill Name',
-                    hintText: 'Enter Rice Mill name',
+                    labelText: 'Device / Mill Name',
+                    hintText: 'Enter Device / Mill name (e.g. Ice Factory)',
                     prefixIcon: const Icon(Icons.factory_outlined, color: Colors.teal),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),

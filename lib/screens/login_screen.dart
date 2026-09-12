@@ -39,22 +39,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const Spacer(),
                 // Logo Container
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withOpacity(0.15),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    border: Border.all(color: Colors.white.withOpacity(0.25)),
                   ),
-                  child: const Icon(
-                    Icons.factory_rounded,
-                    size: 80,
-                    color: Colors.white,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/GPlogo.png',
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
                 // App Title
                 const Text(
-                  'Rice Mill EMS',
+                  'Grid Pulse',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,

@@ -37,31 +37,73 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
         final devices = profile?['assignedDevices'] as List<dynamic>? ?? [];
         final baseMillName = profile?['millName'] ?? 'Rice Mill';
 
-
         return Scaffold(
           backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: Column(
-            children: [
-              Text(
-                baseMillName,
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18),
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            titleSpacing: 16.0,
+            centerTitle: false,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: Text(
+              baseMillName,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 22,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            actions: [
+              // Circular Logo Badge (Right side, close to notifications)
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0, top: 6.0, bottom: 6.0),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey.shade50,
+                    border: Border.all(color: Colors.teal.shade300, width: 1.5),
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/GPlogo.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+              // Circular Notifications Badge (Right side)
+              Padding(
+                padding: const EdgeInsets.only(right: 12.0, top: 6.0, bottom: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue.shade50,
+                    border: Border.all(color: Colors.blue.shade200, width: 1.5),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.notifications_none,
+                      color: Colors.blue,
+                      size: 22,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ],
           ),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          actions: [
-
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.blue, size: 28),
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-              },
-            ),
-          ],
-        ),
           body: devices.isEmpty
               ? const Center(child: Text('No devices assigned.'))
               : Column(

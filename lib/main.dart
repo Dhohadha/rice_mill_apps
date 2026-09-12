@@ -30,15 +30,37 @@ Future<void> _requestPermissions() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
-  
-  await _requestPermissions();
+  // Global Flutter error handler
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Uncaught Flutter Error: ${details.exception}');
+  };
 
-  final notificationService = NotificationService();
-  await notificationService.init();
+  try {
+    await Firebase.initializeApp();
+  } catch (e, stack) {
+    debugPrint('Firebase.initializeApp error: $e\n$stack');
+  }
 
-  final fcmService = FCMService();
-  await fcmService.init();
+  try {
+    await _requestPermissions();
+  } catch (e, stack) {
+    debugPrint('_requestPermissions error: $e\n$stack');
+  }
+
+  try {
+    final notificationService = NotificationService();
+    await notificationService.init();
+  } catch (e, stack) {
+    debugPrint('NotificationService.init error: $e\n$stack');
+  }
+
+  try {
+    final fcmService = FCMService();
+    await fcmService.init();
+  } catch (e, stack) {
+    debugPrint('FCMService.init error: $e\n$stack');
+  }
 
   runApp(
     const ProviderScope(
@@ -104,7 +126,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Rice Mill Monitoring',
+      title: 'Grid Pulse',
       navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

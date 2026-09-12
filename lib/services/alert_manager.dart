@@ -93,8 +93,7 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     // ---- PF Check ----
     if (data.kVATotal >= 10 && data.kWTotal >= 10 && data.pfAvg > 0 && data.pfAvg < settings.pfLimit) {
       currentAlerts.add('Low Power Factor: ${data.pfAvg.toStringAsFixed(3)} < ${settings.pfLimit.toStringAsFixed(2)}');
-      // PF limit uses normal notification, no loud alarm
-      _maybeNotify('PF', '⚠️ Low Power Factor', 'Current PF is ${data.pfAvg.toStringAsFixed(3)}', isNormal: true);
+      _maybeNotify('PF', '⚠️ Low Power Factor', 'Current PF is ${data.pfAvg.toStringAsFixed(3)}');
       _activeBreaches.add('PF');
     } else {
       if (_activeBreaches.remove('PF')) {

@@ -137,39 +137,31 @@ class DevicePage extends ConsumerWidget {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
+                      Text('•', style: TextStyle(color: Colors.grey[400])),
+                      const SizedBox(width: 8),
                     ],
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: data.status == 'offline' ? Colors.red[50] : Colors.green[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: data.status == 'offline' ? Colors.red.shade200 : Colors.green.shade200,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: data.status == 'offline' ? Colors.red : Colors.green,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: data.status == 'offline' ? Colors.red : Colors.green,
-                              shape: BoxShape.circle,
-                            ),
+                        const SizedBox(width: 6),
+                        Text(
+                          data.status == 'offline' ? _formatOfflineTime(data.timestamp) : 'ONLINE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: data.status == 'offline' ? Colors.red[700] : Colors.green[700],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            data.status == 'offline' ? _formatOfflineTime(data.timestamp) : 'ONLINE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: data.status == 'offline' ? Colors.red[800] : Colors.green[800],
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -550,8 +542,24 @@ class DevicePage extends ConsumerWidget {
                 const SizedBox(height: 20),
                 // Graph
                 Container(
-                  height: 200,
-                  padding: const EdgeInsets.only(right: 16, top: 16),
+                  height: 220,
+                  padding: const EdgeInsets.only(right: 16, top: 16, left: 8, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.grey.shade300,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                   child: graphData.when(
                     data: (data) {
                       if (data.isEmpty) return const Center(child: Text('No history data available'));
@@ -559,7 +567,7 @@ class DevicePage extends ConsumerWidget {
                       if (isDayGraph) {
                         // For the 24-hour graph, make it compact (4px per point)
                         double chartWidth = data.length * 4.0;
-                        double minWidth = MediaQuery.of(context).size.width - 32 - 40; // Subtract axis width
+                        double minWidth = MediaQuery.of(context).size.width - 32 - 24 - 40; // Subtract card padding & axis width
 
                         return Row(
                           children: [
