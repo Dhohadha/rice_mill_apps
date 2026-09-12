@@ -171,7 +171,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                               style: TextStyle(
                                 color: Colors.red.shade300,
                                 fontSize: 22,
-                                fontWeight: FontWeight.black,
+                                fontWeight: FontWeight.w900,
                                 letterSpacing: 3,
                               ),
                             ),
@@ -196,7 +196,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                             _displayBody,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha: 0.85),
                               fontSize: 18,
                               height: 1.4,
                             ),
@@ -217,8 +217,8 @@ class _AlarmScreenState extends State<AlarmScreen>
                                     height: 190 * _pulseAnimation.value,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: Colors.red.withOpacity(
-                                        0.25 * (2.0 - _pulseAnimation.value),
+                                      color: Colors.red.withValues(
+                                        alpha: 0.25 * (2.0 - _pulseAnimation.value),
                                       ),
                                     ),
                                   ),
@@ -236,7 +236,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                                         color: Colors.red.shade600,
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.red.withOpacity(0.6),
+                                            color: Colors.red.withValues(alpha: 0.6),
                                             blurRadius: 25,
                                             spreadRadius: 6,
                                           ),
@@ -248,7 +248,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontSize: 32,
-                                            fontWeight: FontWeight.black,
+                                            fontWeight: FontWeight.w900,
                                             letterSpacing: 2,
                                           ),
                                         ),

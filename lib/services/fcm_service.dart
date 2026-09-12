@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'notification_service.dart';
 import 'api_service.dart';
 import 'alarm_service.dart';
+import '../main.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
