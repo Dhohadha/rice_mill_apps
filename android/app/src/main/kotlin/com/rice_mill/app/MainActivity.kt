@@ -32,6 +32,13 @@ class MainActivity: FlutterActivity() {
                     } else {
                         startService(serviceIntent)
                     }
+                    val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                    if (km.isKeyguardLocked) {
+                        val lockIntent = Intent(this@MainActivity, LockScreenAlarmActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        startActivity(lockIntent)
+                    }
                     result.success(true)
                 }
                 "stopAlarm" -> {

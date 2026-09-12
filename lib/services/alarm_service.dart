@@ -1,11 +1,14 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AlarmService {
   static final AlarmService _instance = AlarmService._internal();
   factory AlarmService() => _instance;
   AlarmService._internal();
+
+  static const MethodChannel _platform = MethodChannel('com.rice_mill.app/alarm');
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
@@ -35,6 +38,13 @@ class AlarmService {
         await _player.play(AssetSource('alarm.mp3'));
       }
       _isPlaying = true;
+
+      // Invoke native startAlarm to start AlarmSoundService & LockScreenAlarmActivity if locked
+      try {
+        await _platform.invokeMethod('startAlarm');
+      } catch (e) {
+        debugPrint('Native startAlarm method channel error: $e');
+      }
     } catch (e) {
       debugPrint('❌ Error playing alarm: $e');
     }
@@ -48,6 +58,13 @@ class AlarmService {
 
       await _player.stop();
       _isPlaying = false;
+
+      // Invoke native stopAlarm to stop AlarmSoundService & finish LockScreenAlarmActivity
+      try {
+        await _platform.invokeMethod('stopAlarm');
+      } catch (e) {
+        debugPrint('Native stopAlarm method channel error: $e');
+      }
     } catch (e) {
       debugPrint('❌ Error stopping alarm: $e');
     }
