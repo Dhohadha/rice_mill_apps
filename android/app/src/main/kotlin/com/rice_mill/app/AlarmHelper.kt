@@ -17,7 +17,7 @@ import android.util.Log
 
 object AlarmHelper {
     private const val TAG = "AlarmHelper"
-    const val ALARM_CHANNEL_ID = "grid_pulse_critical_alarm_v12"
+    const val ALARM_CHANNEL_ID = "grid_pulse_critical_alarm_v14"
     const val NOTIF_ID = 999
 
     private var cpuWakeLock: PowerManager.WakeLock? = null
@@ -187,7 +187,7 @@ object AlarmHelper {
     private fun notifyServerStop(alertId: String) {
         Thread {
             try {
-                val url = java.net.URL("http://10.83.170.35:7007/api/stop-alert")
+                val url = java.net.URL("http://13.233.76.8:7007/api/stop-alert")
                 val conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
@@ -238,14 +238,6 @@ object AlarmHelper {
             try {
                 val nm = context.getSystemService(NotificationManager::class.java) ?: return
 
-                val audioAttributes = AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .build()
-
-                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
                 val channel = NotificationChannel(
                     ALARM_CHANNEL_ID,
                     "Critical Threshold Alerts",
@@ -254,7 +246,8 @@ object AlarmHelper {
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 500, 200, 500)
-                    setSound(soundUri, audioAttributes)
+                    // Notification channel is silent; AlarmSoundService MediaPlayer handles looping audio exclusively
+                    setSound(null, null)
                     setBypassDnd(true)
                 }
                 nm.createNotificationChannel(channel)

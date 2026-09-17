@@ -19,8 +19,8 @@ import android.os.Looper
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.rice_mill.app/alarm"
-    private val NOTIF_CHANNEL_ID = "alarm_channel_v5"
-    private val SILENT_CHANNEL_ID = "alarm_channel_silent_v4"
+    private val NOTIF_CHANNEL_ID = "grid_pulse_critical_alarm_v14"
+    private val SILENT_CHANNEL_ID = "grid_pulse_silent_alarm_v14"
     private var methodChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -173,12 +173,7 @@ class MainActivity: FlutterActivity() {
                     "Critical Alerts (Loud)",
                     NotificationManager.IMPORTANCE_HIGH
                 )
-                val soundUri = Uri.parse("android.resource://" + packageName + "/" + R.raw.alarm)
-                val audioAttributes = AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .build()
-                channel.setSound(soundUri, audioAttributes)
+                channel.setSound(null, null)
                 channel.enableVibration(true)
                 channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 manager.createNotificationChannel(channel)

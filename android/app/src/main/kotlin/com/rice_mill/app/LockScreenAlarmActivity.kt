@@ -7,8 +7,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -20,14 +18,12 @@ import android.widget.TextView
 
 class LockScreenAlarmActivity : Activity() {
 
-    private var localMediaPlayer: MediaPlayer? = null
     private lateinit var prefs: SharedPreferences
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
         if (key == "flutter.alarm_playing" || key == "alarm_playing") {
             val isPlaying = RiceMillApplication.getSafeBoolean(sharedPreferences, key, false)
             if (!isPlaying) {
                 Log.d(TAG, "Alarm stopped externally — finishing activity")
-                stopLocalAudio()
                 finish()
             }
         }
@@ -117,108 +113,62 @@ class LockScreenAlarmActivity : Activity() {
         tvAlertTitle.text = title
         tvAlertBody.text = body
 
-        // 5. Start direct local alarm sound playback on ALARM audio stream
-        playLocalAudio()
-
-        // 6. UI Animations
+        // UI Animations
         // CRITICAL ALERT text breathing animation
-        ObjectAnimator.ofPropertyValuesHolder(
-            tvCriticalAlert,
-            PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.2f),
-            PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.2f)
-        ).apply {
-            duration = 1000
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            start()
+        if (tvCriticalAlert != null) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                tvCriticalAlert,
+                PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.2f),
+                PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.2f)
+            ).apply {
+                duration = 1000
+                repeatMode = ValueAnimator.REVERSE
+                repeatCount = ValueAnimator.INFINITE
+                start()
+            }
         }
 
         // STOP Button Ring Pulse
         val btnStopPulse = findViewById<View>(R.id.btnStopPulse)
-        ObjectAnimator.ofPropertyValuesHolder(
-            btnStopPulse,
-            PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.3f),
-            PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.3f),
-            PropertyValuesHolder.ofFloat("alpha", 1.0f, 0.0f)
-        ).apply {
-            duration = 1000
-            repeatMode = ValueAnimator.RESTART
-            repeatCount = ValueAnimator.INFINITE
-            start()
+        if (btnStopPulse != null) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                btnStopPulse,
+                PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.3f),
+                PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.3f),
+                PropertyValuesHolder.ofFloat("alpha", 1.0f, 0.0f)
+            ).apply {
+                duration = 1000
+                repeatMode = ValueAnimator.RESTART
+                repeatCount = ValueAnimator.INFINITE
+                start()
+            }
         }
 
         // STOP Button Container Breathing
-        val btnStop = findViewById<View>(R.id.btnStopContainer)
-        ObjectAnimator.ofPropertyValuesHolder(
-            btnStop,
-            PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.05f),
-            PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.05f)
-        ).apply {
-            duration = 800
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            start()
-        }
-
-        // Handle Stop Button Tap
-        btnStop.setOnClickListener {
-            Log.d(TAG, "STOP button clicked by user")
-            val currentAlertId = intent?.getStringExtra("alertId")
-                ?: prefs.getString("flutter.latest_alert_id", null)
-                ?: prefs.getString("latest_alert_id", "ALARM_ID")
-                ?: "ALARM_ID"
-            stopLocalAudio()
-            AlarmHelper.stopAlarm(this, currentAlertId)
-            finish()
-        }
-    }
-
-    private fun playLocalAudio() {
-        try {
-            val soundEnabled = if (prefs.contains("flutter.alert_sound_enabled")) {
-                RiceMillApplication.getSafeBoolean(prefs, "flutter.alert_sound_enabled", true)
-            } else {
-                RiceMillApplication.getSafeBoolean(prefs, "alert_sound_enabled", true)
+        val btnStop = findViewById<View>(R.id.btnStopContainer) ?: findViewById<View>(R.id.btnStop)
+        if (btnStop != null) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                btnStop,
+                PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.05f),
+                PropertyValuesHolder.ofFloat("scaleY", 1.0f, 1.05f)
+            ).apply {
+                duration = 800
+                repeatMode = ValueAnimator.REVERSE
+                repeatCount = ValueAnimator.INFINITE
+                start()
             }
 
-            if (!soundEnabled) {
-                Log.d(TAG, "Alarm sound disabled in settings, skipping audio")
-                return
+            // Handle Stop Button Tap
+            btnStop.setOnClickListener {
+                Log.d(TAG, "STOP button clicked by user")
+                val currentAlertId = intent?.getStringExtra("alertId")
+                    ?: prefs.getString("flutter.latest_alert_id", null)
+                    ?: prefs.getString("latest_alert_id", "ALARM_ID")
+                    ?: "ALARM_ID"
+                AlarmHelper.stopAlarm(this, currentAlertId)
+                finish()
             }
-
-            if (localMediaPlayer == null) {
-                val resId = resources.getIdentifier("alarm", "raw", packageName)
-                if (resId != 0) {
-                    localMediaPlayer = MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_ALARM)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                .build()
-                        )
-                        val afd = resources.openRawResourceFd(resId)
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
-                        isLooping = true
-                        prepare()
-                        start()
-                    }
-                    Log.d(TAG, "Local MediaPlayer playing on USAGE_ALARM stream")
-                }
-            }
-        } catch (e: Throwable) {
-            Log.e(TAG, "playLocalAudio error: ${e.message}", e)
         }
-    }
-
-    private fun stopLocalAudio() {
-        try {
-            localMediaPlayer?.stop()
-            localMediaPlayer?.release()
-        } catch (e: Throwable) {
-            Log.e(TAG, "stopLocalAudio error: ${e.message}")
-        }
-        localMediaPlayer = null
     }
 
     // Disable the physical back button so the user MUST hit STOP
@@ -255,9 +205,6 @@ class LockScreenAlarmActivity : Activity() {
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
-        if (localMediaPlayer?.isPlaying != true) {
-            playLocalAudio()
-        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -286,14 +233,9 @@ class LockScreenAlarmActivity : Activity() {
             ?: "ALARM_ID"
         findViewById<TextView>(R.id.tvAlertTitle)?.text = title
         findViewById<TextView>(R.id.tvAlertBody)?.text = body
-
-        if (localMediaPlayer?.isPlaying != true) {
-            playLocalAudio()
-        }
     }
 
     override fun onDestroy() {
-        stopLocalAudio()
         if (::prefs.isInitialized) {
             prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }

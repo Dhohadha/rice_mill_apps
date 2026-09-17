@@ -29,7 +29,7 @@ class AlarmSoundService : Service() {
     companion object {
         const val ACTION_STOP = "com.rice_mill.app.STOP_ALARM_SERVICE"
         const val NOTIF_ID = 999
-        const val ALARM_CHANNEL_ID = "grid_pulse_critical_alarm_v12"
+        const val ALARM_CHANNEL_ID = "grid_pulse_critical_alarm_v14"
         private const val TAG = "AlarmSoundService"
         private const val MAX_CYCLES = 4
         private const val PLAY_DURATION_MS = 90_000L
@@ -345,14 +345,6 @@ class AlarmSoundService : Service() {
             try {
                 val nm = getSystemService(NotificationManager::class.java) ?: return
 
-                val audioAttributes = AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .build()
-
-                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
                 val channel = NotificationChannel(
                     ALARM_CHANNEL_ID,
                     "Critical Threshold Alerts",
@@ -361,7 +353,8 @@ class AlarmSoundService : Service() {
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 500, 200, 500)
-                    setSound(soundUri, audioAttributes)
+                    // Notification channel is silent; AlarmSoundService MediaPlayer handles looping audio exclusively
+                    setSound(null, null)
                     setBypassDnd(true)
                 }
                 nm.createNotificationChannel(channel)

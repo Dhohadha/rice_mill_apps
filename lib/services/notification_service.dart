@@ -126,8 +126,8 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     final isSoundEnabled = prefs.getBool('alert_sound_enabled') ?? true;
 
-    // Matches the native channel created with USAGE_ALARM & VISIBILITY_PUBLIC in MainActivity.kt
-    final String channelId = isSoundEnabled ? 'alarm_channel_v5' : 'alarm_channel_silent_v4';
+    // Matches the native channel created with VISIBILITY_PUBLIC in MainActivity.kt
+    final String channelId = isSoundEnabled ? 'grid_pulse_critical_alarm_v14' : 'grid_pulse_silent_alarm_v14';
     final String channelName = isSoundEnabled ? 'Critical Alerts (Loud)' : 'Critical Alerts (Silent)';
 
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
@@ -137,10 +137,10 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.max,
       visibility: NotificationVisibility.public,
-      playSound: isSoundEnabled,
+      playSound: false, // Purely silent notification; AlarmSoundService MediaPlayer handles looping audio exclusively
       ongoing: true,
       autoCancel: false,
-      sound: isSoundEnabled ? const RawResourceAndroidNotificationSound('alarm') : null,
+      sound: null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
