@@ -103,15 +103,15 @@ class LockScreenAlarmActivity : Activity() {
         val tvAlertBody = findViewById<TextView>(R.id.tvAlertBody)
         val tvAlertIcon = findViewById<ImageView>(R.id.tvAlertIcon)
         
-        tvAlertIcon.outlineProvider = object : android.view.ViewOutlineProvider() {
+        tvAlertIcon?.outlineProvider = object : android.view.ViewOutlineProvider() {
             override fun getOutline(view: View, outline: android.graphics.Outline) {
                 outline.setOval(0, 0, view.width, view.height)
             }
         }
-        tvAlertIcon.clipToOutline = true
+        tvAlertIcon?.clipToOutline = true
 
-        tvAlertTitle.text = title
-        tvAlertBody.text = body
+        tvAlertTitle?.text = title
+        tvAlertBody?.text = body
 
         // UI Animations
         // CRITICAL ALERT text breathing animation
@@ -145,7 +145,7 @@ class LockScreenAlarmActivity : Activity() {
         }
 
         // STOP Button Container Breathing
-        val btnStop = findViewById<View>(R.id.btnStopContainer) ?: findViewById<View>(R.id.btnStop)
+        val btnStop = findViewById<View>(R.id.btnStopContainer)
         if (btnStop != null) {
             ObjectAnimator.ofPropertyValuesHolder(
                 btnStop,
