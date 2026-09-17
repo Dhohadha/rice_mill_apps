@@ -7,9 +7,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
@@ -17,21 +20,27 @@ import android.widget.TextView
 
 class LockScreenAlarmActivity : Activity() {
 
+    private var localMediaPlayer: MediaPlayer? = null
     private lateinit var prefs: SharedPreferences
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-        if (key == "flutter.alarm_playing") {
-            val isPlaying = sharedPreferences.getBoolean(key, false)
+        if (key == "flutter.alarm_playing" || key == "alarm_playing") {
+            val isPlaying = RiceMillApplication.getSafeBoolean(sharedPreferences, key, false)
             if (!isPlaying) {
-                android.util.Log.d("LockScreenAlarmActivity", "Alarm stopped externally — finishing activity")
+                Log.d(TAG, "Alarm stopped externally — finishing activity")
+                stopLocalAudio()
                 finish()
             }
         }
     }
 
+    companion object {
+        private const val TAG = "LockScreenAlarmActivity"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Ensure activity shows over the lock screen and turns the screen on
+        // 1. Ensure activity shows over the lock screen and turns the screen on
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -41,20 +50,23 @@ class LockScreenAlarmActivity : Activity() {
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
 
-        // Block system back/swipe-back gesture on Android 13+ (API 33+)
+        // 2. Block system back/swipe-back gesture on Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(
-                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
-            ) {
-                // Do nothing to restrict back navigation
+            try {
+                onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+                ) {
+                    // Do nothing to restrict back navigation
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
             }
         }
 
-        // WakeLock to force screen on
+        // 3. WakeLock to force physical screen on immediately
         try {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             @Suppress("DEPRECATION")
@@ -64,19 +76,31 @@ class LockScreenAlarmActivity : Activity() {
                 PowerManager.ON_AFTER_RELEASE,
                 "RiceMill:NativeAlarmWakeLock"
             )
-            wakeLock.acquire(10000L) // 10 seconds
+            wakeLock.acquire(15000L) // 15 seconds
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
         setContentView(R.layout.activity_lock_screen_alarm)
 
-        // Read FCM message from SharedPreferences
+        // 4. Read FCM message from Intent or SharedPreferences
         prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         prefs.registerOnSharedPreferenceChangeListener(listener)
         
-        val title = prefs.getString("flutter.latest_alarm_title", "⚠️ Grid Pulse Alert!")
-        val body = prefs.getString("flutter.latest_alarm_body", "Threshold breached. Tap STOP to acknowledge.")
+        val title = intent?.getStringExtra("title")
+            ?: prefs.getString("flutter.latest_alarm_title", null)
+            ?: prefs.getString("latest_alarm_title", "⚠️ Grid Pulse Alert!")
+            ?: "⚠️ Grid Pulse Alert!"
+
+        val body = intent?.getStringExtra("body")
+            ?: prefs.getString("flutter.latest_alarm_body", null)
+            ?: prefs.getString("latest_alarm_body", "Critical electrical threshold exceeded! Tap to inspect.")
+            ?: "Critical electrical threshold exceeded! Tap to inspect."
+
+        val alertId = intent?.getStringExtra("alertId")
+            ?: prefs.getString("flutter.latest_alert_id", null)
+            ?: prefs.getString("latest_alert_id", "ALARM_ID")
+            ?: "ALARM_ID"
 
         val tvCriticalAlert = findViewById<TextView>(R.id.tvCriticalAlert)
         val tvAlertTitle = findViewById<TextView>(R.id.tvAlertTitle)
@@ -93,6 +117,10 @@ class LockScreenAlarmActivity : Activity() {
         tvAlertTitle.text = title
         tvAlertBody.text = body
 
+        // 5. Start direct local alarm sound playback on ALARM audio stream
+        playLocalAudio()
+
+        // 6. UI Animations
         // CRITICAL ALERT text breathing animation
         ObjectAnimator.ofPropertyValuesHolder(
             tvCriticalAlert,
@@ -134,24 +162,138 @@ class LockScreenAlarmActivity : Activity() {
 
         // Handle Stop Button Tap
         btnStop.setOnClickListener {
-            // Send STOP intent to AlarmSoundService
-            val stopIntent = Intent(this, AlarmSoundService::class.java).apply {
-                action = AlarmSoundService.ACTION_STOP
-            }
-            startService(stopIntent)
-            
-            // Instantly destroy this native screen
+            Log.d(TAG, "STOP button clicked by user")
+            val currentAlertId = intent?.getStringExtra("alertId")
+                ?: prefs.getString("flutter.latest_alert_id", null)
+                ?: prefs.getString("latest_alert_id", "ALARM_ID")
+                ?: "ALARM_ID"
+            stopLocalAudio()
+            AlarmHelper.stopAlarm(this, currentAlertId)
             finish()
         }
     }
 
-    // Disable the physical back button so they MUST hit STOP
+    private fun playLocalAudio() {
+        try {
+            val soundEnabled = if (prefs.contains("flutter.alert_sound_enabled")) {
+                RiceMillApplication.getSafeBoolean(prefs, "flutter.alert_sound_enabled", true)
+            } else {
+                RiceMillApplication.getSafeBoolean(prefs, "alert_sound_enabled", true)
+            }
+
+            if (!soundEnabled) {
+                Log.d(TAG, "Alarm sound disabled in settings, skipping audio")
+                return
+            }
+
+            if (localMediaPlayer == null) {
+                val resId = resources.getIdentifier("alarm", "raw", packageName)
+                if (resId != 0) {
+                    localMediaPlayer = MediaPlayer().apply {
+                        setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build()
+                        )
+                        val afd = resources.openRawResourceFd(resId)
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                        isLooping = true
+                        prepare()
+                        start()
+                    }
+                    Log.d(TAG, "Local MediaPlayer playing on USAGE_ALARM stream")
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "playLocalAudio error: ${e.message}", e)
+        }
+    }
+
+    private fun stopLocalAudio() {
+        try {
+            localMediaPlayer?.stop()
+            localMediaPlayer?.release()
+        } catch (e: Throwable) {
+            Log.e(TAG, "stopLocalAudio error: ${e.message}")
+        }
+        localMediaPlayer = null
+    }
+
+    // Disable the physical back button so the user MUST hit STOP
     @Suppress("MissingSuperCall")
     override fun onBackPressed() {
-        // Do nothing! They must press the STOP button.
+        // Must tap STOP
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+        if (localMediaPlayer?.isPlaying != true) {
+            playLocalAudio()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+        val title = intent?.getStringExtra("title")
+            ?: prefs.getString("flutter.latest_alarm_title", null)
+            ?: prefs.getString("latest_alarm_title", "⚠️ Grid Pulse Alert!")
+        val body = intent?.getStringExtra("body")
+            ?: prefs.getString("flutter.latest_alarm_body", null)
+            ?: prefs.getString("latest_alarm_body", "Threshold breached. Tap STOP to acknowledge.")
+        val alertId = intent?.getStringExtra("alertId")
+            ?: prefs.getString("flutter.latest_alert_id", null)
+            ?: prefs.getString("latest_alert_id", "ALARM_ID")
+            ?: "ALARM_ID"
+        findViewById<TextView>(R.id.tvAlertTitle)?.text = title
+        findViewById<TextView>(R.id.tvAlertBody)?.text = body
+
+        if (localMediaPlayer?.isPlaying != true) {
+            playLocalAudio()
+        }
     }
 
     override fun onDestroy() {
+        stopLocalAudio()
         if (::prefs.isInitialized) {
             prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }

@@ -54,4 +54,5 @@ server/service_account_key.json
 **/android/key.properties
 *.jks
 *.keystore
+*.mp4
 

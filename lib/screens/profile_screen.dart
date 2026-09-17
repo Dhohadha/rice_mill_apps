@@ -4,6 +4,7 @@ import 'package:rice_mill/screens/mixed_analysis_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/providers.dart';
 import '../services/alarm_service.dart';
+import '../widgets/alarm_permission_dialog.dart';
 import 'share_access_screen.dart';
 import 'notifications_screen.dart';
 
@@ -14,15 +15,40 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> with WidgetsBindingObserver {
   bool _isLoggingOut = false;
   final Set<String> _processingInvites = {}; // Set of ownerEmails being processed
   bool _isAlarmSoundEnabled = true;
+  bool _isFullScreenPermissionGranted = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadAlarmSetting();
+    _checkFullScreenPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkFullScreenPermission();
+    }
+  }
+
+  Future<void> _checkFullScreenPermission() async {
+    final isGranted = await AlarmPermissionHelper.isGranted();
+    if (mounted) {
+      setState(() {
+        _isFullScreenPermissionGranted = isGranted;
+      });
+    }
   }
 
   Future<void> _loadAlarmSetting() async {
@@ -127,7 +153,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
+
+            // Lock-Screen Alarm Permission Warning Banner (if disabled)
+            if (!_isFullScreenPermissionGranted) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF87171)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Lock-Screen Alarm Permission Needed',
+                            style: TextStyle(
+                              color: Color(0xFF991B1B),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Full-screen lock-screen alert permission is required so that the critical emergency red screen pops up immediately when your phone is locked or screen is off.',
+                      style: TextStyle(
+                        color: Color(0xFF7F1D1D),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          elevation: 0,
+                        ),
+                        onPressed: () async {
+                          await AlarmPermissionHelper.openSettings();
+                        },
+                        icon: const Icon(Icons.settings, size: 16),
+                        label: const Text('Enable Full-Screen Alarm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Settings List
             if (userProfile.value?['role'] != 'Guest' && userProfile.value?['isSharedUser'] != true) ...[
@@ -169,6 +270,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               subtitle: _isAlarmSoundEnabled ? 'Audible emergency alerts are enabled' : 'Audible emergency alerts are muted',
               value: _isAlarmSoundEnabled,
               onChanged: _toggleAlarmSetting,
+            ),
+            _buildSettingTile(
+              icon: Icons.screen_lock_portrait,
+              title: 'Lock-Screen Alarm Display',
+              subtitle: _isFullScreenPermissionGranted
+                  ? 'Active • Full-screen emergency alarm enabled'
+                  : '⚠️ Action Required • Tap to enable in system settings',
+              trailing: _isFullScreenPermissionGranted
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('ACTIVE', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('ACTION NEEDED', style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+              onTap: () async {
+                await AlarmPermissionHelper.openSettings();
+              },
             ),
 
             
@@ -234,6 +362,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Widget? trailing,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -250,7 +379,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+        trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
         onTap: onTap,
       ),
     );

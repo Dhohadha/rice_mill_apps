@@ -6,7 +6,7 @@ import 'alarm_service.dart';
 import 'providers.dart';
 import '../models/meter_data.dart';
 import '../models/app_settings.dart';
-import '../main.dart';
+import 'widget_service.dart';
 
 class AlertState {
   final bool isAlarmPlaying;
@@ -38,16 +38,28 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
 
   // Track last alert time to prevent notification spam.
   final Map<String, DateTime> _lastAlertTime = {};
-  final Duration _alertCooldown = const Duration(minutes: 5);
+  final Duration _alertCooldown = const Duration(seconds: 30);
   final Set<String> _activeBreaches = {};
+  late String _deviceId;
 
   @override
   AlertState build(String deviceId) {
-    // Listen to the specific device's data
+    _deviceId = deviceId;
     ref.listen(mqttDataProvider(deviceId), (previous, next) {
       final settings = ref.read(settingsProvider);
-      if (next.hasValue && settings != null) {
-        _checkThresholds(next.value!, settings);
+      if (next.hasValue) {
+        if (settings != null) {
+          _checkThresholds(next.value!, settings);
+        } else {
+          final profile = ref.read(userProfileProvider).value;
+          final millName = profile?['millName'] as String?;
+          WidgetService.recordDeviceTelemetry(
+            deviceId: deviceId,
+            data: next.value!,
+            alerts: [],
+            deviceName: (millName != null && millName.isNotEmpty) ? '$millName ($deviceId)' : 'Device $deviceId',
+          );
+        }
       }
     });
 
@@ -103,34 +115,51 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final isStoppedInBg = prefs.getBool('isAlarmStopped') ?? false;
+    final isStoppedInBg = (prefs.getBool('isAlarmStopped') ?? false) || (prefs.getBool('flutter.isAlarmStopped') ?? false);
     
     if (isStoppedInBg && !state.isAlarmStopped) {
        state = state.copyWith(isAlarmStopped: true);
     }
 
-    if (currentAlerts.isEmpty && isStoppedInBg) {
-       await prefs.setBool('isAlarmStopped', false);
+    // Only re-arm the alarm once all active breaches have cleared
+    if (currentAlerts.isEmpty) {
+       if (isStoppedInBg) {
+         await prefs.setBool('isAlarmStopped', false);
+         await prefs.setBool('flutter.isAlarmStopped', false);
+       }
+       if (state.isAlarmStopped) {
+         state = state.copyWith(isAlarmStopped: false);
+       }
     }
 
     if (shouldTriggerAlarm && !state.isAlarmPlaying && !state.isAlarmStopped) {
-      _alarmService.playAlarm();
-      state = state.copyWith(isAlarmPlaying: true, isAlarmStopped: false, activeAlerts: currentAlerts);
-      showGlobalAlarmScreen(
+      _alarmService.playAlarm(
         title: '⚠️ Threshold Alert!',
         body: currentAlerts.join('\n'),
       );
+      state = state.copyWith(isAlarmPlaying: true, isAlarmStopped: false, activeAlerts: currentAlerts);
     } else {
       if (currentAlerts.join(',') != state.activeAlerts.join(',')) {
         state = state.copyWith(activeAlerts: currentAlerts);
-      }
-      if (currentAlerts.isEmpty && state.isAlarmStopped) {
-        state = state.copyWith(isAlarmStopped: false);
       }
       if (currentAlerts.isEmpty && state.isAlarmPlaying) {
         stopAlarm();
       }
     }
+
+    // Update Multi-Device Telemetry & Sync Home Screen Widgets
+    final profile = ref.read(userProfileProvider).value;
+    final millName = profile?['millName'] as String?;
+    final deviceLabel = (millName != null && millName.isNotEmpty)
+        ? '$millName ($_deviceId)'
+        : 'Device $_deviceId';
+
+    WidgetService.recordDeviceTelemetry(
+      deviceId: _deviceId,
+      data: data,
+      alerts: currentAlerts,
+      deviceName: deviceLabel,
+    );
   }
 
   void _maybeNotify(String type, String title, String body, {bool isNormal = false}) {
@@ -146,12 +175,16 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
           payload: 'history',
         );
       } else {
-        _notificationService.showThresholdAlert(
-          id: 999,
-          title: title,
-          body: body,
-          payload: 'history',
-        );
+        // Native AlarmSoundService owns Notification 999 with STOP action & full-screen intent.
+        // Only post if native alarm is not already playing to avoid duplicate notifications.
+        if (!state.isAlarmPlaying && !_alarmService.isPlaying) {
+          _notificationService.showThresholdAlert(
+            id: 999,
+            title: title,
+            body: body,
+            payload: 'history',
+          );
+        }
       }
       _lastAlertTime[type] = now;
     }
@@ -163,6 +196,9 @@ class AlertManager extends FamilyNotifier<AlertState, String> {
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isAlarmStopped', true);
+    await prefs.setBool('flutter.isAlarmStopped', true);
+    await prefs.setBool('alarm_playing', false);
+    await prefs.setBool('flutter.alarm_playing', false);
     await prefs.setString('lastStoppedTime', DateTime.now().toIso8601String());
 
     _lastAlertTime.forEach((key, value) {

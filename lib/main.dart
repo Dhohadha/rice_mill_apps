@@ -12,10 +12,11 @@ import 'screens/login_screen.dart';
 import 'screens/not_registered_screen.dart';
 import 'screens/access_revoked_screen.dart';
 import 'screens/loading_screen.dart';
-import 'screens/alarm_screen.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/providers.dart';
+
+import 'widgets/alarm_permission_dialog.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -27,14 +28,6 @@ Future<void> _requestPermissions() async {
       await Permission.notification.request();
     }
   }
-}
-
-void showGlobalAlarmScreen({String title = '⚠️ Threshold Alert!', String body = 'Critical condition detected.', String alertId = 'ALARM_ID'}) {
-  globalNavigatorKey.currentState?.push(
-    MaterialPageRoute(
-      builder: (_) => AlarmScreen(title: title, body: body, alertId: alertId),
-    ),
-  );
 }
 
 void main() async {
@@ -110,7 +103,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           MaterialPageRoute(builder: (_) => const NotificationsScreen()),
         );
       } else if (payload != null && payload.isNotEmpty) {
-        showGlobalAlarmScreen(title: '⚠️ Critical Alert', body: 'Tap STOP to silence alarm', alertId: payload);
+        AlarmService().playAlarm(alertId: payload);
       }
     };
 
@@ -123,11 +116,11 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       final prefs = await SharedPreferences.getInstance();
-      final isAlarmStopped = prefs.getBool('isAlarmStopped') ?? false;
+      final isAlarmStopped = (prefs.getBool('isAlarmStopped') ?? false) ||
+          (prefs.getBool('flutter.isAlarmStopped') ?? false);
       
       if (isAlarmStopped) {
         AlarmService().stopAlarm();
-        await prefs.setBool('isAlarmStopped', false);
       }
 
       ref.read(userProfileProvider.notifier).refreshProfileQuietly();
@@ -140,9 +133,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       title: 'Grid Pulse',
       navigatorKey: globalNavigatorKey,
       debugShowCheckedModeBanner: false,
-      routes: {
-        '/alarm': (context) => const AlarmScreen(),
-      },
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
@@ -188,6 +178,12 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
                         if (role == 'Guest' && devices.isEmpty && invites.isEmpty) {
                           return const NotRegisteredScreen();
                         }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) {
+                            AlarmPermissionHelper.checkAndPromptIfNeeded(context);
+                          }
+                        });
 
                         return const MainScreen();
                       },

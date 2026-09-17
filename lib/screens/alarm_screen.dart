@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/alarm_service.dart';
 import '../services/notification_service.dart';
 
@@ -68,10 +67,9 @@ class _AlarmScreenState extends State<AlarmScreen>
 
   Future<void> _checkExternalStop() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final isStopped = prefs.getBool('isAlarmStopped') ?? false;
-      if (isStopped && mounted) {
-        debugPrint('[AlarmScreen] Alarm stopped via notification button — dismissing full screen');
+      final isPlaying = await AlarmService().checkAlarmStatus();
+      if (!isPlaying && mounted) {
+        debugPrint('[AlarmScreen] Alarm stopped externally — dismissing full screen');
         _dismissScreen();
       }
     } catch (e) {
@@ -83,19 +81,17 @@ class _AlarmScreenState extends State<AlarmScreen>
     debugPrint('[AlarmScreen] STOP button pressed on screen');
     _statusWatcher?.cancel();
 
-    // 1. Stop local audio
+    // 1. Stop native alarm audio & clear flags
     AlarmService().stopAlarm();
 
-    // 2. Cancel local notification
-    await NotificationService().cancelAlert();
+    // 2. Cancel all notifications
+    NotificationService().cancelAlert();
 
-    // 3. Mark alarm as stopped in SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isAlarmStopped', true);
-    await prefs.setString('lastStoppedTime', DateTime.now().toIso8601String());
+    // 3. Drop lock screen flags to prevent roaming
+    AlarmService().removeLockScreenFlags();
 
     // 4. Send stop signal to server
-    await NotificationService.stopAlertOnServer(_alertId);
+    NotificationService.stopAlertOnServer(_alertId);
 
     if (mounted) {
       _dismissScreen();
@@ -104,6 +100,7 @@ class _AlarmScreenState extends State<AlarmScreen>
 
   void _dismissScreen() {
     _statusWatcher?.cancel();
+    AlarmService().removeLockScreenFlags();
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
     }

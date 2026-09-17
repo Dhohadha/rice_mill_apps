@@ -1,21 +1,18 @@
 import 'package:flutter/widgets.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 import 'api_service.dart';
 import 'alarm_service.dart';
-import '../main.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint("Handling a background message: ${message.messageId}");
   
-  // Initialize NotificationService in background isolate
   final notificationService = NotificationService();
   await notificationService.init();
 
@@ -33,16 +30,24 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } else {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('latest_alarm_title', title);
+    await prefs.setString('flutter.latest_alarm_title', title);
     await prefs.setString('latest_alarm_body', body);
+    await prefs.setString('flutter.latest_alarm_body', body);
+    await prefs.setString('latest_alert_id', alertId);
+    await prefs.setString('flutter.latest_alert_id', alertId);
     await prefs.setBool('alarm_playing', true);
+    await prefs.setBool('flutter.alarm_playing', true);
     await prefs.setBool('isAlarmStopped', false);
+    await prefs.setBool('flutter.isAlarmStopped', false);
 
     await notificationService.showThresholdAlert(
-      id: 999, // New unified ID
+      id: 999,
       title: title,
       body: body,
       payload: alertId,
     );
+
+    await AlarmService().playAlarm(title: title, body: body, alertId: alertId);
   }
 }
 
@@ -66,17 +71,16 @@ class FCMService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('User granted permission');
+      debugPrint('User granted notification permission');
     } else {
-      debugPrint('User declined or has not accepted permission');
+      debugPrint('User declined or has not accepted notification permission');
     }
 
     // Foreground listener
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint('Got a message whilst in the foreground!');
       debugPrint('Message data: ${message.data}');
 
-      // Extract title and body from data payload since we changed server to send data
       String title = message.data['title'] ?? '⚠️ Grid Pulse Alert';
       String body = message.data['body'] ?? 'Limit exceeded';
       String alertId = message.data['alertId'] ?? 'ALARM_ID';
@@ -89,26 +93,17 @@ class FCMService {
           payload: alertId,
         );
       } else {
-        _notificationService.showThresholdAlert(
-          id: message.hashCode,
+        await _notificationService.showThresholdAlert(
+          id: 999,
           title: title,
           body: body,
           payload: alertId,
         );
-
-        // Play the loud alarm sound explicitly for foreground alerts
-        AlarmService().playAlarm(title: title, body: body);
-
-        // Show full screen alarm page
-        showGlobalAlarmScreen(
-          title: title,
-          body: body,
-          alertId: alertId,
-        );
+        AlarmService().playAlarm(title: title, body: body, alertId: alertId);
       }
     });
 
-    // App opened from background/terminated via notification
+    // App opened from background via notification
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('App opened from notification!');
       String title = message.data['title'] ?? '⚠️ Grid Pulse Alert';
@@ -116,13 +111,22 @@ class FCMService {
       String alertId = message.data['alertId'] ?? 'ALARM_ID';
 
       if (alertId != 'INVITE') {
-        showGlobalAlarmScreen(
-          title: title,
-          body: body,
-          alertId: alertId,
-        );
+        AlarmService().playAlarm(title: title, body: body, alertId: alertId);
       }
     });
+
+    // Register token immediately if already logged in
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        final token = await _fcm.getToken();
+        if (token != null) {
+          await _registerTokenWithBackend(token);
+        }
+      } catch (e) {
+        debugPrint('Initial token fetch error: $e');
+      }
+    }
 
     // Listen to Auth State Changes to register token immediately upon login
     FirebaseAuth.instance.authStateChanges().listen((user) async {
@@ -139,6 +143,17 @@ class FCMService {
     _fcm.onTokenRefresh.listen((newToken) {
       _registerTokenWithBackend(newToken);
     });
+  }
+
+  Future<void> registerToken() async {
+    try {
+      final token = await _fcm.getToken();
+      if (token != null) {
+        await _registerTokenWithBackend(token);
+      }
+    } catch (e) {
+      debugPrint('Manual registerToken error: $e');
+    }
   }
 
   Future<void> _registerTokenWithBackend(String token) async {
@@ -158,7 +173,7 @@ class FCMService {
       );
 
       if (response.statusCode == 200) {
-        debugPrint('Token registered successfully');
+        debugPrint('✅ FCM Token registered successfully with backend: ${token.substring(0, 15)}...');
       } else {
         debugPrint('Failed to register token: ${response.statusCode} ${response.body}');
       }

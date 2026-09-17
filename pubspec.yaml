@@ -52,6 +52,7 @@ dependencies:
   smooth_page_indicator: ^1.2.0
   connectivity_plus: ^7.1.1
   url_launcher: ^6.3.2
+  home_widget: ^0.7.0
 
 dev_dependencies:
   flutter_test:
@@ -80,7 +81,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/alarm.mp3
-    - assets/alert fro ricemill.m4a
+    - assets/alarm.m4a
     - assets/GPlogo.png
     - assets/GPlogo_padded.png
 

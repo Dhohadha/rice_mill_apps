@@ -14,99 +14,105 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.content.Context
 import android.app.KeyguardManager
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.rice_mill.app/alarm"
     private val NOTIF_CHANNEL_ID = "alarm_channel_v5"
     private val SILENT_CHANNEL_ID = "alarm_channel_silent_v4"
+    private var methodChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         GeneratedPluginRegistrant.registerWith(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "startAlarm" -> {
-                    val serviceIntent = Intent(this@MainActivity, AlarmSoundService::class.java)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        startForegroundService(serviceIntent)
-                    } else {
-                        startService(serviceIntent)
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startAlarm" -> {
+                        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        val title = prefs.getString("flutter.latest_alarm_title", null)
+                            ?: prefs.getString("latest_alarm_title", "⚠️ THRESHOLD BREACH ALERT")
+                            ?: "⚠️ THRESHOLD BREACH ALERT"
+                        val body = prefs.getString("flutter.latest_alarm_body", null)
+                            ?: prefs.getString("latest_alarm_body", "Critical electrical threshold exceeded! Tap to inspect.")
+                            ?: "Critical electrical threshold exceeded! Tap to inspect."
+                        val alertId = prefs.getString("flutter.latest_alert_id", null)
+                            ?: prefs.getString("latest_alert_id", "ALARM_ID")
+                            ?: "ALARM_ID"
+                        AlarmHelper.triggerAlarm(this@MainActivity, title, body, alertId)
+                        result.success(true)
                     }
-                    val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                    if (km.isKeyguardLocked) {
-                        val lockIntent = Intent(this@MainActivity, LockScreenAlarmActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    "stopAlarm" -> {
+                        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        val alertId = prefs.getString("flutter.latest_alert_id", null)
+                            ?: prefs.getString("latest_alert_id", "ALARM_ID")
+                        AlarmHelper.stopAlarm(this@MainActivity, alertId)
+                        result.success(true)
+                    }
+                    "checkFullScreenPermission" -> {
+                        result.success(checkFullScreenPermission())
+                    }
+                    "openFullScreenSettings" -> {
+                        openFullScreenSettings()
+                        result.success(true)
+                    }
+                    "checkBatteryOptimization" -> {
+                        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                        result.success(pm.isIgnoringBatteryOptimizations(packageName))
+                    }
+                    "requestIgnoreBatteryOptimization" -> {
+                        requestIgnoreBatteryOptimization()
+                        result.success(true)
+                    }
+                    "openAutoStartSettings" -> {
+                        openAutoStartSettings()
+                        result.success(true)
+                    }
+                    "openNotificationSettings" -> {
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        try {
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            fallbackIntent.data = Uri.parse("package:$packageName")
+                            fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(fallbackIntent)
                         }
-                        startActivity(lockIntent)
+                        result.success(true)
                     }
-                    result.success(true)
-                }
-                "stopAlarm" -> {
-                    val serviceIntent = Intent(this@MainActivity, AlarmSoundService::class.java)
-                    serviceIntent.action = AlarmSoundService.ACTION_STOP
-                    startService(serviceIntent)
-                    result.success(true)
-                }
-                "checkFullScreenPermission" -> {
-                    result.success(checkFullScreenPermission())
-                }
-                "openFullScreenSettings" -> {
-                    openFullScreenSettings()
-                    result.success(true)
-                }
-                "checkBatteryOptimization" -> {
-                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                    result.success(pm.isIgnoringBatteryOptimizations(packageName))
-                }
-                "requestIgnoreBatteryOptimization" -> {
-                    requestIgnoreBatteryOptimization()
-                    result.success(true)
-                }
-                "openAutoStartSettings" -> {
-                    openAutoStartSettings()
-                    result.success(true)
-                }
-                "openNotificationSettings" -> {
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    try {
-                        startActivity(intent)
-                    } catch (e: Exception) {
-                        val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        fallbackIntent.data = android.net.Uri.parse("package:$packageName")
-                        fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(fallbackIntent)
+                    "closeApp" -> {
+                        finishAndRemoveTask()
+                        result.success(true)
                     }
-                    result.success(true)
-                }
-                "closeApp" -> {
-                    finishAndRemoveTask()
-                    result.success(true)
-                }
-                "isScreenLocked" -> {
-                    val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                    result.success(km.isKeyguardLocked)
-                }
-                "removeLockScreenFlags" -> {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-                        setShowWhenLocked(false)
-                        setTurnScreenOn(false)
+                    "isScreenLocked" -> {
+                        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                        result.success(km.isKeyguardLocked || !pm.isInteractive)
                     }
-                    window.clearFlags(
-                        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        android.view.WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-                    )
-                    result.success(true)
-                }
-                "checkAlarmStatus" -> {
-                    val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                    result.success(prefs.getBoolean("flutter.alarm_playing", false))
-                }
-                else -> {
-                    result.notImplemented()
+                    "removeLockScreenFlags" -> {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                            setShowWhenLocked(false)
+                            setTurnScreenOn(false)
+                        }
+                        window.clearFlags(
+                            android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                            android.view.WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+                        )
+                        result.success(true)
+                    }
+                    "checkAlarmStatus" -> {
+                        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        val isPlaying = RiceMillApplication.getSafeBoolean(prefs, "flutter.alarm_playing", false) || RiceMillApplication.getSafeBoolean(prefs, "alarm_playing", false)
+                        result.success(isPlaying)
+                    }
+                    else -> {
+                        result.notImplemented()
+                    }
                 }
             }
         }
@@ -138,9 +144,21 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun openFullScreenSettings() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                intent.data = Uri.parse("package:$packageName")
+                startActivity(intent)
+            } else {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                intent.data = Uri.parse("package:$packageName")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             intent.data = Uri.parse("package:$packageName")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
         }
     }
@@ -181,55 +199,18 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun configureLockScreenFlags() {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val isAlarmPlaying = prefs.getBoolean("flutter.alarm_playing", false)
-
-        if (isAlarmPlaying) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(true)
-                setTurnScreenOn(true)
-            }
-
-            window.addFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-            )
-
-            val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                km.requestDismissKeyguard(this, null)
-            } else {
-                @Suppress("DEPRECATION")
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-            }
-
-            try {
-                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                @Suppress("DEPRECATION")
-                val wakeLock = pm.newWakeLock(
-                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE,
-                    "RiceMill:AlarmWakeLock"
-                )
-                wakeLock.acquire(10000L)
-            } catch (e: Exception) {
-                android.util.Log.e("MainActivity", "Failed to acquire wake lock: ${e.message}")
-            }
-        } else {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(false)
-                setTurnScreenOn(false)
-            }
-            window.clearFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-            )
+        // MainActivity (Flutter) must NEVER display over the lock screen.
+        // The lock screen is reserved EXCLUSIVELY for LockScreenAlarmActivity (Kotlin).
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
         }
+        window.clearFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            android.view.WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
     }
 
     private fun openAutoStartSettings() {

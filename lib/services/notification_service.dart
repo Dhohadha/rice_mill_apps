@@ -6,14 +6,15 @@ import 'dart:convert';
 import 'alarm_service.dart';
 import 'api_service.dart';
 
-// Background handler - minimal, just records the stop request to SharedPreferences
-// We do NOT initialize Flutter engine here to avoid Samsung freeze bugs
+// Background handler - records stop request to SharedPreferences and notifies server
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) async {
   if (notificationResponse.actionId == 'stop_alarm') {
-    // Write the stop flag so main isolate picks it up on next resume
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('alarm_playing', false);
+    await prefs.setBool('flutter.alarm_playing', false);
     await prefs.setBool('isAlarmStopped', true);
+    await prefs.setBool('flutter.isAlarmStopped', true);
     await prefs.setString('lastStoppedTime', DateTime.now().toIso8601String());
 
     // Notify server even in background
@@ -31,13 +32,12 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // Callbacks for foreground tap handling
   Function(String?)? onNotificationTap;
   Function()? onStopAlarmAction;
 
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -54,20 +54,13 @@ class NotificationService {
     await _notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
-        // This is called when app is FOREGROUND or BACKGROUND (brought to front)
         if (details.actionId == 'stop_alarm') {
           AlarmService().stopAlarm();
           onStopAlarmAction?.call();
-          
-          // Notify server
+
           if (details.payload != null) {
             stopAlertOnServer(details.payload!);
           }
-
-          // Also clear the SharedPrefs flag if set by background
-          SharedPreferences.getInstance().then((prefs) {
-            prefs.setBool('isAlarmStopped', true);
-          });
         } else {
           onNotificationTap?.call(details.payload);
         }
@@ -78,23 +71,21 @@ class NotificationService {
 
   static Future<void> stopAlertOnServer(String alertId) async {
     try {
-      // Using hardcoded IP or ApiService.baseUrl if possible
-      // In background isolate, we use the static baseUrl
       final url = '${ApiService.baseUrl}/api/stop-alert';
-      print('🌐 Notifying server to stop alert: $alertId at $url');
-      
       await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'alertId': alertId}),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
-      print('❌ Error notifying server: $e');
+      // Ignored
     }
   }
 
   Future<void> cancelAlert() async {
     await _notificationsPlugin.cancel(999);
+    await _notificationsPlugin.cancel(889);
+    await _notificationsPlugin.cancel(888);
   }
 
   Future<void> showNormalNotification({
@@ -109,7 +100,7 @@ class NotificationService {
       channelDescription: 'Standard notifications',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
     );
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
@@ -135,32 +126,31 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     final isSoundEnabled = prefs.getBool('alert_sound_enabled') ?? true;
 
-    final String channelId = isSoundEnabled ? 'threshold_alerts_v11_loud' : 'threshold_alerts_v11_silent';
-    final String channelName = isSoundEnabled ? 'Emergency Threshold Alerts (Loud)' : 'Emergency Threshold Alerts (Silent)';
+    // Matches the native channel created with USAGE_ALARM & VISIBILITY_PUBLIC in MainActivity.kt
+    final String channelId = isSoundEnabled ? 'alarm_channel_v5' : 'alarm_channel_silent_v4';
+    final String channelName = isSoundEnabled ? 'Critical Alerts (Loud)' : 'Critical Alerts (Silent)';
 
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
-      channelDescription: 'Critical power alerts with action buttons',
+      channelDescription: 'Critical power threshold alerts with stop action',
       importance: Importance.max,
       priority: Priority.max,
       visibility: NotificationVisibility.public,
       playSound: isSoundEnabled,
-      ongoing: true,      // Samsung never collapses ongoing — button always visible
-      autoCancel: false,  // Only dismiss on explicit STOP action
+      ongoing: true,
+      autoCancel: false,
       sound: isSoundEnabled ? const RawResourceAndroidNotificationSound('alarm') : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
-      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-      // No BigTextStyleInformation — Samsung shows action buttons inline in compact view
-      actions: <AndroidNotificationAction>[
+      actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(
           'stop_alarm',
           '🔕 STOP ALARM',
-          showsUserInterface: false, // Set to false to prevent app redirect
+          showsUserInterface: false,
           cancelNotification: true,
         ),
       ],
