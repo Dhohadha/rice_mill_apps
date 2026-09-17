@@ -67,6 +67,7 @@ class NotificationsScreen extends ConsumerWidget {
                         child: Icon(
                           n['type'] == 'CMD' ? Icons.flash_on
                           : n['type'] == 'POWER' ? Icons.electrical_services
+                          : (n['type'] == 'POWER_OFF' || n['type'] == 'TRIP') ? Icons.power_off
                           : Icons.info,
                           color: Colors.red,
                           size: 20,

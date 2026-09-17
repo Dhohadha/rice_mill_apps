@@ -8,7 +8,7 @@ import '../models/meter_data.dart';
 
 class ApiService {
   // Using 10.0.2.2 for Android Emulator, localhost for others
-  static const String _defaultIP = '10.83.170.35';
+  static const String _defaultIP = '13.233.76.8';
   static const String _envIP = String.fromEnvironment(
     'API_IP',
     defaultValue: _defaultIP,
